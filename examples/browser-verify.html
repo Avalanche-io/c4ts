@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C4 Manifest Verifier</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+    color: #a0c4ff;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 1.5rem;
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: #a0c4ff;
+  }
+  textarea {
+    width: 100%;
+    height: 200px;
+    background: #16213e;
+    border: 1px solid #333;
+    color: #e0e0e0;
+    font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    font-size: 0.8rem;
+    padding: 0.75rem;
+    border-radius: 4px;
+    resize: vertical;
+    margin-bottom: 1rem;
+  }
+  textarea:focus { outline: 1px solid #a0c4ff; }
+  button {
+    background: #0f3460;
+    color: #e0e0e0;
+    border: 1px solid #a0c4ff;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-right: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  button:hover { background: #16457a; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .progress-container {
+    background: #16213e;
+    border-radius: 4px;
+    height: 24px;
+    margin: 1rem 0;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: #a0c4ff;
+    transition: width 0.15s;
+    width: 0%;
+  }
+  .progress-text {
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 0.5rem;
+  }
+  .results {
+    margin-top: 1rem;
+    display: none;
+  }
+  .result-section {
+    margin-bottom: 1rem;
+  }
+  .result-section h3 {
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+  }
+  .ok h3 { color: #6fbf73; }
+  .missing h3 { color: #ffa726; }
+  .corrupt h3 { color: #ef5350; }
+  .extra h3 { color: #888; }
+  .result-list {
+    font-size: 0.8rem;
+    padding-left: 1rem;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .result-list div { padding: 1px 0; }
+  .summary {
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.75rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+  }
+  .summary.pass { background: #1b5e20; color: #a5d6a7; }
+  .summary.fail { background: #5e1b1b; color: #ef9a9a; }
+  .note {
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 2rem;
+    border-top: 1px solid #333;
+    padding-top: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<h1>C4 Manifest Verifier</h1>
+<p class="subtitle">Verify a local directory against a c4m manifest -- no install required.</p>
+
+<label for="c4m-input">Paste c4m manifest text:</label>
+<textarea id="c4m-input" placeholder="Paste your .c4m file contents here..."></textarea>
+
+<button id="pick-dir-btn" onclick="startVerification()">Pick Directory and Verify</button>
+<button id="clear-btn" onclick="clearResults()">Clear</button>
+
+<div class="progress-text" id="progress-text"></div>
+<div class="progress-container" id="progress-container">
+  <div class="progress-bar" id="progress-bar"></div>
+</div>
+
+<div class="results" id="results"></div>
+
+<div class="note">
+  <p>
+    This page uses the File System Access API (Chrome/Edge) and the Web Crypto
+    API (SHA-512) to verify files entirely in your browser. No data leaves your
+    machine.
+  </p>
+</div>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// Inline C4 implementation for browser use.
+//
+// In production, you would import from a CDN or bundler:
+//   import { Manifest, identify } from 'https://cdn.example.com/@avalanche-io/c4'
+//
+// This inline version implements just enough of the c4 API to perform
+// manifest parsing and content verification without any external dependencies.
+// ---------------------------------------------------------------------------
+
+// -- Base58 encoder/decoder (Bitcoin alphabet) --
+const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+const BASE = BigInt(ALPHABET.length);
+const ALPHA_MAP = new Map();
+for (let i = 0; i < ALPHABET.length; i++) ALPHA_MAP.set(ALPHABET[i], BigInt(i));
+
+function base58encode(bytes) {
+  let num = BigInt(0);
+  for (const b of bytes) num = num * 256n + BigInt(b);
+  let str = '';
+  while (num > 0n) {
+    str = ALPHABET[Number(num % BASE)] + str;
+    num = num / BASE;
+  }
+  for (const b of bytes) { if (b === 0) str = '1' + str; else break; }
+  return str;
+}
+
+function base58decode(str) {
+  let num = BigInt(0);
+  for (const ch of str) {
+    const val = ALPHA_MAP.get(ch);
+    if (val === undefined) throw new Error(`invalid base58 char: ${ch}`);
+    num = num * BASE + val;
+  }
+  const hex = num.toString(16).padStart(128, '0');
+  const bytes = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return bytes;
+}
+
+// -- C4 ID --
+async function identifyBytes(data) {
+  const buf = await crypto.subtle.digest('SHA-512', data);
+  return new Uint8Array(buf);
+}
+
+function digestToString(digest) {
+  return 'c4' + base58encode(digest);
+}
+
+function parseC4ID(s) {
+  if (s.length !== 90 || s[0] !== 'c' || s[1] !== '4') return null;
+  return base58decode(s.slice(2));
+}
+
+// -- Minimal c4m parser --
+// Parses c4m text into a list of {name, c4id, isDir, depth, size} entries.
+function parseManifest(text) {
+  const entries = [];
+  const lines = text.split('\n');
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (line === '' || line.startsWith('#') || line.startsWith('c4m ')) continue;
+    if (line.startsWith('base ')) continue;
+
+    // Count leading spaces for depth
+    const stripped = line.trimStart();
+    const indent = line.length - stripped.length;
+    const depth = Math.floor(indent / 2);
+
+    // Split fields: mode timestamp size name [-> target] [c4id | -]
+    const fields = stripped.split(/\s+/);
+    if (fields.length < 4) continue;
+
+    const mode = fields[0];
+    // timestamp = fields[1]
+    const sizeStr = fields[2];
+    const name = fields[3];
+    const entryIsDir = mode.startsWith('d') || name.endsWith('/');
+
+    // Find C4 ID: last field starting with "c4" and 90 chars long
+    let c4id = null;
+    const lastField = fields[fields.length - 1];
+    if (lastField.length === 90 && lastField.startsWith('c4')) {
+      c4id = lastField;
+    }
+
+    const size = sizeStr === '-' ? -1 : parseInt(sizeStr.replace(/,/g, ''), 10);
+
+    entries.push({ name, c4id, isDir: entryIsDir, depth, size });
+  }
+
+  return entries;
+}
+
+// Build full paths from depth-based entries
+function buildPaths(entries) {
+  const stack = [];
+  const result = [];
+
+  for (const e of entries) {
+    while (stack.length > e.depth) stack.pop();
+    const fullPath = stack.join('') + e.name;
+    result.push({ ...e, path: fullPath });
+    if (e.isDir) {
+      while (stack.length <= e.depth) stack.push('');
+      stack[e.depth] = e.name;
+    }
+  }
+
+  return result;
+}
+
+// -- File System Access API helpers --
+
+// Recursively read all files from a directory handle
+async function* walkDirectory(dirHandle, prefix = '') {
+  for await (const [name, handle] of dirHandle.entries()) {
+    const path = prefix ? prefix + name : name;
+    if (handle.kind === 'file') {
+      yield { path, handle };
+    } else {
+      yield* walkDirectory(handle, path + '/');
+    }
+  }
+}
+
+// -- Verification logic --
+
+async function verifyManifest(c4mText, dirHandle, onProgress) {
+  const rawEntries = parseManifest(c4mText);
+  const entries = buildPaths(rawEntries);
+
+  // Collect file entries with C4 IDs
+  const expectedFiles = [];
+  const expectedPaths = new Set();
+  for (const e of entries) {
+    if (e.isDir) continue;
+    expectedPaths.add(e.path);
+    if (e.c4id && e.c4id !== '-') {
+      expectedFiles.push({ path: e.path, c4id: e.c4id });
+    } else {
+      expectedFiles.push({ path: e.path, c4id: null });
+    }
+  }
+
+  const ok = [];
+  const missing = [];
+  const corrupt = [];
+  const total = expectedFiles.length;
+
+  // Build a map of file handles from the directory
+  const fileMap = new Map();
+  for await (const { path, handle } of walkDirectory(dirHandle)) {
+    fileMap.set(path, handle);
+  }
+
+  // Check each expected file
+  for (let i = 0; i < expectedFiles.length; i++) {
+    const { path, c4id } = expectedFiles[i];
+    onProgress(path, i, total);
+
+    const handle = fileMap.get(path);
+    if (!handle) {
+      missing.push(path);
+      continue;
+    }
+
+    if (!c4id) {
+      ok.push(path);
+      continue;
+    }
+
+    // Read file and compute C4 ID
+    const file = await handle.getFile();
+    const buffer = await file.arrayBuffer();
+    const digest = await identifyBytes(new Uint8Array(buffer));
+    const actual = digestToString(digest);
+
+    if (actual === c4id) {
+      ok.push(path);
+    } else {
+      corrupt.push({ path, expected: c4id, actual });
+    }
+  }
+
+  // Find extra files not in manifest
+  const extra = [];
+  for (const [path] of fileMap) {
+    if (!expectedPaths.has(path)) {
+      extra.push(path);
+    }
+  }
+
+  onProgress('done', total, total);
+  return { ok, missing, corrupt, extra };
+}
+
+// -- UI --
+
+window.startVerification = async function() {
+  const c4mText = document.getElementById('c4m-input').value.trim();
+  if (!c4mText) {
+    alert('Please paste c4m manifest text first.');
+    return;
+  }
+
+  if (!('showDirectoryPicker' in window)) {
+    alert('This browser does not support the File System Access API. Use Chrome or Edge.');
+    return;
+  }
+
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+  } catch {
+    // User cancelled the picker
+    return;
+  }
+
+  const btn = document.getElementById('pick-dir-btn');
+  btn.disabled = true;
+
+  const progressContainer = document.getElementById('progress-container');
+  const progressBar = document.getElementById('progress-bar');
+  const progressText = document.getElementById('progress-text');
+  const resultsDiv = document.getElementById('results');
+
+  progressContainer.style.display = 'block';
+  resultsDiv.style.display = 'none';
+  progressBar.style.width = '0%';
+
+  try {
+    const report = await verifyManifest(c4mText, dirHandle, (path, index, total) => {
+      const pct = total > 0 ? Math.round(((index + 1) / total) * 100) : 0;
+      progressBar.style.width = pct + '%';
+      progressText.textContent = `[${index + 1}/${total}] ${path}`;
+    });
+
+    // Render results
+    const isOk = report.missing.length === 0 && report.corrupt.length === 0 && report.extra.length === 0;
+    let html = '';
+
+    if (isOk) {
+      html += `<div class="summary pass">All ${report.ok.length} files verified OK.</div>`;
+    } else {
+      html += `<div class="summary fail">Verification found issues.</div>`;
+    }
+
+    if (report.ok.length > 0) {
+      html += `<div class="result-section ok">
+        <h3>OK: ${report.ok.length} files</h3>
+        <div class="result-list">${report.ok.map(p => `<div>${escHtml(p)}</div>`).join('')}</div>
+      </div>`;
+    }
+
+    if (report.missing.length > 0) {
+      html += `<div class="result-section missing">
+        <h3>MISSING: ${report.missing.length} files</h3>
+        <div class="result-list">${report.missing.map(p => `<div>${escHtml(p)}</div>`).join('')}</div>
+      </div>`;
+    }
+
+    if (report.corrupt.length > 0) {
+      html += `<div class="result-section corrupt">
+        <h3>CORRUPT: ${report.corrupt.length} files</h3>
+        <div class="result-list">${report.corrupt.map(e =>
+          `<div>${escHtml(e.path)}<br>&nbsp;&nbsp;expected: ${e.expected}<br>&nbsp;&nbsp;actual: ${e.actual}</div>`
+        ).join('')}</div>
+      </div>`;
+    }
+
+    if (report.extra.length > 0) {
+      html += `<div class="result-section extra">
+        <h3>EXTRA: ${report.extra.length} files (not in manifest)</h3>
+        <div class="result-list">${report.extra.map(p => `<div>${escHtml(p)}</div>`).join('')}</div>
+      </div>`;
+    }
+
+    resultsDiv.innerHTML = html;
+    resultsDiv.style.display = 'block';
+
+  } catch (err) {
+    resultsDiv.innerHTML = `<div class="summary fail">Error: ${escHtml(err.message)}</div>`;
+    resultsDiv.style.display = 'block';
+  }
+
+  btn.disabled = false;
+};
+
+window.clearResults = function() {
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('progress-container').style.display = 'none';
+  document.getElementById('progress-text').textContent = '';
+};
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>
