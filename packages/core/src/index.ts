@@ -59,6 +59,61 @@ export {
   formatTarget,
 } from './safename.js'
 
+// Abstract Interfaces
+export {
+  type Store,
+  ContentNotFoundError,
+  CompositeStore,
+} from './store.js'
+
+export {
+  type FileSystem,
+  type DirEntry,
+  type FileStat,
+  FileNotFoundError,
+  FileExistsError,
+  streamToBytes,
+  bytesToStream,
+  joinPath,
+} from './filesystem.js'
+
+export {
+  type ContentSource,
+  type ResolveResult,
+  ContentResolver,
+  storeAsSource,
+} from './resolver.js'
+
+// Concrete Implementations
+export { MemoryStore } from './memory-store.js'
+export { MemoryFS } from './memory-fs.js'
+
+// Observable Manifest
+export { ObservableManifest, type ManifestEventType, type ManifestChangeEvent, type ManifestChangeListener } from './observable.js'
+
+// Scanner
+export { scan, type ScanOptions } from './scanner.js'
+
+// Verify
+export { verify, type VerifyReport, type CorruptEntry, type VerifyOptions } from './verify.js'
+
+// Reconcile
+export {
+  plan as reconcilePlan,
+  apply as reconcileApply,
+  type ReconcilePlan,
+  type ReconcileResult,
+  type ReconcileOp,
+  type ReconcileOpType,
+  type ReconcileOptions,
+} from './reconcile.js'
+
+// Workspace
+export { Workspace, type WorkspaceStatus, type CheckoutOptions, type SnapshotOptions } from './workspace.js'
+
+// Pool / Ingest
+export { pool, ingest, type PoolResult, type IngestResult, type PoolOptions } from './pool.js'
+
 // Errors
 export {
   C4Error,

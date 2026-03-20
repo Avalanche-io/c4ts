@@ -1,0 +1,48 @@
+{
+  "name": "@avalanche-io/c4-node",
+  "version": "1.0.5",
+  "description": "C4 Node.js extensions — filesystem store, scanner, workspace",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@avalanche-io/c4": "workspace:*"
+  },
+  "keywords": [
+    "c4",
+    "content-addressing",
+    "filesystem",
+    "store",
+    "workspace"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Avalanche-io/c4ts.git",
+    "directory": "packages/node"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0"
+  }
+}
