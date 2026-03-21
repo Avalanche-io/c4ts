@@ -233,12 +233,12 @@ describe('parse edge cases', () => {
   it('throws on invalid prefix', () => {
     // 90 chars but wrong prefix
     const bad = 'x4' + '1'.repeat(88)
-    expect(() => parse(bad)).toThrow(/must start with "c4"/)
+    expect(() => parse(bad)).toThrow(/non c4 id character at position 0/)
   })
 
   it('throws on invalid prefix "c5"', () => {
     const bad = 'c5' + '1'.repeat(88)
-    expect(() => parse(bad)).toThrow(/must start with "c4"/)
+    expect(() => parse(bad)).toThrow(/non c4 id character at position 0/)
   })
 
   it('throws on invalid base58 character (0)', () => {

@@ -12,9 +12,11 @@ import {
   InvalidEntryError,
   DuplicatePathError,
   PathTraversalError,
+  PatchIDMismatchError,
 } from './errors.js'
 import { decode, type DecodeResult } from './decoder.js'
 import { encode } from './encoder.js'
+import { applyPatch } from './diff.js'
 
 /** Check if a name contains path semantics (invalid for c4m entries). */
 function isPathName(name: string): boolean {
@@ -53,12 +55,55 @@ export class Manifest {
   /** Parse c4m text into a Manifest. */
   static async parse(text: string): Promise<Manifest> {
     const result = await decode(text)
+
+    // If there are patch boundaries, apply patch semantics
+    if (result.patchBoundaries.length > 0) {
+      // First section is the base entries
+      let accumulated = new Manifest()
+      accumulated.version = result.version
+      accumulated.base = result.base
+      accumulated.entries = result.sections[0] ?? []
+      accumulated.rangeData = result.rangeData
+
+      // Each boundary ID should match the accumulated manifest's C4 ID,
+      // then the next section is a patch to apply.
+      for (let i = 0; i < result.patchBoundaries.length; i++) {
+        const boundaryID = result.patchBoundaries[i]
+        const computedID = await accumulated.computeC4ID()
+
+        if (!computedID.equals(boundaryID)) {
+          throw new PatchIDMismatchError(
+            0,
+            boundaryID.toString(),
+            computedID.toString(),
+          )
+        }
+
+        // The next section (i+1) contains patch entries
+        const patchSection = result.sections[i + 1]
+        if (patchSection && patchSection.length > 0) {
+          const patchManifest = new Manifest()
+          patchManifest.entries = patchSection
+          accumulated = applyPatch(accumulated, patchManifest)
+          accumulated.rangeData = result.rangeData
+        }
+      }
+
+      return accumulated
+    }
+
+    // Non-patch mode: simple assembly
     const m = new Manifest()
     m.version = result.version
     m.base = result.base
     m.entries = result.entries
     m.rangeData = result.rangeData
     return m
+  }
+
+  /** Invalidate the tree index, forcing it to be rebuilt on next access. */
+  invalidateIndex(): void {
+    this._index = null
   }
 
   /** Add an entry. */

@@ -1,4 +1,5 @@
 import { encode, decode } from "./base58.js";
+import { BadIDLengthError, BadIDCharError } from "./errors.js";
 
 const digestLen = 64;
 const prefix = "c4";
@@ -131,12 +132,10 @@ export async function identifyBytes(data: Uint8Array): Promise<C4ID> {
 /** Parse a "c4..." string synchronously (base58 decode only, no hashing). */
 export function parse(s: string): C4ID {
   if (s.length !== idLen) {
-    throw new Error(
-      `c4 ids must be ${idLen} characters long, input length ${s.length}`
-    );
+    throw new BadIDLengthError(s.length);
   }
   if (s[0] !== "c" || s[1] !== "4") {
-    throw new Error(`c4 id must start with "c4"`);
+    throw new BadIDCharError(0);
   }
   const digest = decode(s.slice(2));
   return new C4ID(digest);

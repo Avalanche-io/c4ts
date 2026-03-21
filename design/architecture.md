@@ -119,7 +119,7 @@ The Manifest class gains an optional observable layer. When entries change, subs
 
 ```typescript
 // Opt-in: wrap any manifest to make it observable
-const reactive = Manifest.observable(manifest)
+const reactive = new ObservableManifest(manifest)
 
 reactive.on('add', (path, entry) => { ... })
 reactive.on('remove', (path) => { ... })
@@ -157,10 +157,10 @@ Uses IndexedDB object stores with C4 ID string keys. Blobs stored directly (no b
 
 ```typescript
 const dirHandle = await window.showDirectoryPicker()
-const manifest = await scanDirectory(dirHandle, {
+const fs = new FileSystemAccessFS(dirHandle)
+const manifest = await scan(fs, '', {
   store,                                    // optional: store content during scan
-  progress: (path, i, total) => { ... },
-  workers: navigator.hardwareConcurrency,   // parallel hashing
+  progress: (path, i) => { ... },
 })
 ```
 

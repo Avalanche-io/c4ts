@@ -381,11 +381,17 @@ function parseEntryFromLine(
 /**
  * Decode a c4m text string into entries and metadata.
  * Returns the raw components; the Manifest class assembles them.
+ *
+ * When patch boundaries (bare C4 IDs between entry sections) are present,
+ * sections and patchBoundaries are populated so that Manifest.parse() can
+ * verify each boundary and apply patch semantics.
  */
 export interface DecodeResult {
   version: string
   base: C4ID | null
   entries: Entry[]
+  sections: Entry[][]       // each section between patch boundaries
+  patchBoundaries: C4ID[]   // the bare C4 IDs between sections
   rangeData: Map<string, string>  // C4ID string -> inline ID list
 }
 
@@ -396,6 +402,8 @@ export async function decode(text: string): Promise<DecodeResult> {
     version: '1.0',
     base: null,
     entries: [],
+    sections: [],
+    patchBoundaries: [],
     rangeData: new Map(),
   }
 
@@ -404,9 +412,6 @@ export async function decode(text: string): Promise<DecodeResult> {
   let section: Entry[] = []
   let firstLine = true
   let patchMode = false
-
-  // We need applyPatch for patch mode — import dynamically to avoid circular deps
-  let applyPatch: ((base: any, patch: any) => any) | null = null
 
   for (const rawLine of lines) {
     lineNum++
@@ -439,12 +444,9 @@ export async function decode(text: string): Promise<DecodeResult> {
           throw new EmptyPatchError(`line ${lineNum}`)
         }
 
-        if (!patchMode) {
-          result.entries.push(...section)
-        } else {
-          // Patch mode — for now just append (full patch semantics in manifest.ts)
-          result.entries.push(...section)
-        }
+        // Save the current section and the boundary ID
+        result.sections.push(section)
+        result.patchBoundaries.push(id)
         section = []
         patchMode = true
       }
@@ -463,13 +465,20 @@ export async function decode(text: string): Promise<DecodeResult> {
     firstLine = false
   }
 
-  // Flush remaining
-  if (!patchMode) {
-    result.entries.push(...section)
-  } else if (section.length > 0) {
-    result.entries.push(...section)
-  } else if (patchMode) {
+  // Flush remaining section
+  if (patchMode && section.length === 0) {
     throw new EmptyPatchError('at end of input')
+  }
+  if (section.length > 0) {
+    result.sections.push(section)
+  }
+
+  // For non-patch mode, entries is just the flat list from all sections.
+  // For patch mode, entries is populated by Manifest.parse() after applying patches.
+  if (!patchMode) {
+    for (const s of result.sections) {
+      result.entries.push(...s)
+    }
   }
 
   return result

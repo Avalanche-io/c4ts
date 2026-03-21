@@ -2,7 +2,6 @@ import type { Manifest } from './manifest.js'
 import {
   type Entry,
   formatMode,
-  formatTimestamp,
   formatSizeWithCommas,
   formatEntry,
   flowOperator,

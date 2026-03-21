@@ -1,5 +1,7 @@
 # c4ts — C4 for TypeScript
 
+> **Note**: This is the original design vision document. The implementation has evolved — see [README.md](./README.md) for the actual API and [design/architecture.md](./design/architecture.md) for the current architecture. API names and structure below may differ from what was shipped.
+
 ## Vision
 
 A native TypeScript implementation of C4 that runs in browsers AND Node.js. The browser capability is the killer differentiator — no other C4 implementation can verify a delivery, diff two manifests, or scan a directory without installing anything.

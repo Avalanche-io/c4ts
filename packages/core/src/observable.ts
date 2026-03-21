@@ -76,7 +76,7 @@ export class ObservableManifest {
     // Invalidate the manifest's tree index since entry data changed.
     // The simplest way: remove and re-add at the same position.
     this.manifest.entries.splice(idx, 1, entry)
-    ;(this.manifest as any)._index = null
+    this.manifest.invalidateIndex()
     this.emit({ type: 'modify', path, entry, oldEntry })
   }
 

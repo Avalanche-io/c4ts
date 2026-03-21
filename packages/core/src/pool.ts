@@ -1,4 +1,5 @@
 import type { C4ID } from './id.js'
+import { parse as parseC4ID } from './id.js'
 import type { FileSystem } from './filesystem.js'
 import { joinPath, streamToBytes, bytesToStream } from './filesystem.js'
 import type { Store } from './store.js'
@@ -81,8 +82,7 @@ export async function pool(
 
     // Copy from store
     try {
-      const { parse } = await import('./id.js')
-      const c4id = parse(idStr)
+      const c4id = parseC4ID(idStr)
       if (await store.has(c4id)) {
         const stream = await store.get(c4id)
         await fs.writeFile(objectPath, stream)
@@ -138,8 +138,7 @@ export async function ingest(
     options?.progress?.(name, i, objects.length)
 
     try {
-      const { parse } = await import('./id.js')
-      const c4id = parse(name)
+      const c4id = parseC4ID(name)
       if (await store.has(c4id)) {
         skipped++
         continue
