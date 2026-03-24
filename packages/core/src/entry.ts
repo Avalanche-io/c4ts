@@ -197,7 +197,7 @@ export function formatEntry(e: Entry, indentWidth: number, displayFormat: boolea
   // Mode
   let modeStr: string
   if (e.mode === 0 && e.modeType === '-') {
-    modeStr = '----------'  // Null mode in display format
+    modeStr = displayFormat ? '----------' : '-'
   } else {
     modeStr = formatMode(e.modeType, e.mode)
   }
