@@ -3,6 +3,7 @@ import { identifyBytes } from './id.js'
 import type { Store } from './store.js'
 import { ContentNotFoundError } from './store.js'
 import { streamToBytes, bytesToStream } from './filesystem.js'
+import { tryCanonicalizeC4m } from './identify-content.js'
 
 /**
  * In-memory content-addressed store backed by a Map.
@@ -24,7 +25,14 @@ export class MemoryStore implements Store {
   }
 
   async put(data: ReadableStream<Uint8Array> | Uint8Array): Promise<C4ID> {
-    const bytes = data instanceof Uint8Array ? data : await streamToBytes(data)
+    let bytes = data instanceof Uint8Array ? data : await streamToBytes(data)
+
+    // If content parses as c4m, store the canonical form
+    const canonical = await tryCanonicalizeC4m(bytes)
+    if (canonical) {
+      bytes = canonical
+    }
+
     const id = await identifyBytes(bytes)
     const key = id.toString()
     if (!this.data.has(key)) {

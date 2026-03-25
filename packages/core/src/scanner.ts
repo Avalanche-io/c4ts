@@ -2,7 +2,7 @@ import type { FileSystem } from './filesystem.js'
 import type { Store } from './store.js'
 import { Manifest } from './manifest.js'
 import { createEntry } from './entry.js'
-import { identifyBytes } from './id.js'
+import { identifyContent } from './identify-content.js'
 import { streamToBytes, joinPath } from './filesystem.js'
 
 /** Options for the scan function. */
@@ -105,7 +105,7 @@ async function walkDir(
     if (state.computeIds) {
       const stream = await fs.readFile(fullPath)
       const bytes = await streamToBytes(stream)
-      c4id = await identifyBytes(bytes)
+      c4id = await identifyContent(bytes)
 
       if (state.store) {
         await state.store.put(bytes)

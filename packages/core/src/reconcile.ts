@@ -1,5 +1,5 @@
 import type { C4ID } from './id.js'
-import { identifyBytes } from './id.js'
+import { identifyContent } from './identify-content.js'
 import type { FileSystem } from './filesystem.js'
 import { streamToBytes, bytesToStream, joinPath } from './filesystem.js'
 import type { Store } from './store.js'
@@ -95,7 +95,7 @@ export async function plan(
         // File exists — check if content matches
         const stream = await fs.readFile(fullPath)
         const bytes = await streamToBytes(stream)
-        const actualId = await identifyBytes(bytes)
+        const actualId = await identifyContent(bytes)
         if (actualId.equals(entry.c4id)) {
           skipped.push(path)
         } else {

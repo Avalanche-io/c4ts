@@ -1,6 +1,6 @@
 import type { FileSystem } from './filesystem.js'
 import type { Manifest } from './manifest.js'
-import { identifyBytes } from './id.js'
+import { identifyContent } from './identify-content.js'
 import { isDir } from './entry.js'
 import { streamToBytes, joinPath, FileNotFoundError } from './filesystem.js'
 
@@ -79,7 +79,7 @@ export async function verify(
 
     const stream = await fs.readFile(fullPath)
     const bytes = await streamToBytes(stream)
-    const actualId = await identifyBytes(bytes)
+    const actualId = await identifyContent(bytes)
     const actualStr = actualId.toString()
 
     if (actualStr === expectedId) {
