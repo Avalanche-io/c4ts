@@ -489,7 +489,18 @@ function calculateDirectorySize(entries: Entry[]): number {
     if (e.size < 0) return -1
     total += e.size
   }
+  total += c4mContentSize(entries)
   return total
+}
+
+/** Byte length of the canonical c4m text for one directory level. */
+function c4mContentSize(entries: Entry[]): number {
+  const encoder = new TextEncoder()
+  let n = 0
+  for (const e of entries) {
+    n += encoder.encode(canonicalEntry(e)).byteLength + 1 // +1 for '\n'
+  }
+  return n
 }
 
 function getMostRecentModtime(entries: Entry[]): Date {

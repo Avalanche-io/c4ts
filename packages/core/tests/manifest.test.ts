@@ -41,7 +41,7 @@ describe('Manifest.parse', () => {
   it('has correct size for all entries', async () => {
     const m = await Manifest.parse(vector.canonical)
     expect(m.entries[0].size).toBe(3)
-    expect(m.entries[1].size).toBe(3)
+    expect(m.entries[1].size).toBe(136) // dir size includes canonical c4m content
     expect(m.entries[2].size).toBe(3)
   })
 
