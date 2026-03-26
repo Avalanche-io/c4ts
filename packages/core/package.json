@@ -1,6 +1,6 @@
 {
   "name": "@avalanche-io/c4",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "C4 Universal Content Identification — TypeScript implementation",
   "license": "Apache-2.0",
   "type": "module",
@@ -42,5 +42,9 @@
     "type": "git",
     "url": "https://github.com/Avalanche-io/c4ts.git",
     "directory": "packages/core"
+  },
+  "homepage": "https://github.com/Avalanche-io/c4ts",
+  "bugs": {
+    "url": "https://github.com/Avalanche-io/c4ts/issues"
   }
 }

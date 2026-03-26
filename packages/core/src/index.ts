@@ -1,5 +1,5 @@
 // C4 Universal Content Identification — TypeScript Implementation
-// @avalanche-io/c4 v1.0.5
+// @avalanche-io/c4 v1.0.11
 
 // Core ID
 export { C4ID, identify, identifyBytes, parse } from './id.js'
