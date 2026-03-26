@@ -1,6 +1,6 @@
 {
   "name": "@avalanche-io/c4-node",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "C4 Node.js extensions — filesystem store, scanner, workspace",
   "license": "Apache-2.0",
   "type": "module",
