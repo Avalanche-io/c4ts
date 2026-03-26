@@ -3,7 +3,7 @@
 [![CI](https://github.com/Avalanche-io/c4ts/actions/workflows/ci.yml/badge.svg)](https://github.com/Avalanche-io/c4ts/actions)
 [![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178c6.svg)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/tests-301%20passed-brightgreen.svg)](#)
+[![Tests](https://img.shields.io/badge/tests-303%20passed-brightgreen.svg)](#)
 [![npm @avalanche-io/c4](https://img.shields.io/npm/v/@avalanche-io/c4.svg?label=@avalanche-io/c4)](https://www.npmjs.com/package/@avalanche-io/c4)
 [![npm @avalanche-io/c4-node](https://img.shields.io/npm/v/@avalanche-io/c4-node.svg?label=@avalanche-io/c4-node)](https://www.npmjs.com/package/@avalanche-io/c4-node)
 
