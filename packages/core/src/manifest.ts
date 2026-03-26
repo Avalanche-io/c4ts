@@ -447,14 +447,20 @@ export class Manifest {
 function propagateMetadata(entries: Entry[]): void {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]
-    if (isDir(entry) && hasNullValues(entry)) {
-      const children = getDirectoryChildren(entries, entry)
-      if (entry.size < 0) {
-        entry.size = calculateDirectorySize(children)
-      }
-      if (entry.timestamp.getTime() === 0) {
-        entry.timestamp = getMostRecentModtime(children)
-      }
+    if (!isDir(entry)) continue
+
+    // Robust null check: size may be -1, null, or undefined at runtime.
+    const needsSize = !(entry.size >= 0)
+    const needsTimestamp = entry.timestamp.getTime() === 0
+
+    if (!needsSize && !needsTimestamp) continue
+
+    const children = getDirectoryChildren(entries, entry)
+    if (needsSize) {
+      entry.size = calculateDirectorySize(children)
+    }
+    if (needsTimestamp) {
+      entry.timestamp = getMostRecentModtime(children)
     }
   }
 }
@@ -475,7 +481,7 @@ function getDirectoryChildren(entries: Entry[], dir: Entry): Entry[] {
 function calculateDirectorySize(entries: Entry[]): number {
   let total = 0
   for (const e of entries) {
-    if (e.size < 0) return -1
+    if (!(e.size >= 0)) return -1
     total += e.size
   }
   total += c4mContentSize(entries)
