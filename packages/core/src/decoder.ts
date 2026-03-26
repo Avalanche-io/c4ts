@@ -11,7 +11,6 @@ import { unsafeName } from './safename.js'
 import {
   InvalidEntryError,
   EmptyPatchError,
-  PatchIDMismatchError,
 } from './errors.js'
 import type { Manifest } from './manifest.js'
 

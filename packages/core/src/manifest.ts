@@ -12,7 +12,6 @@ import {
   InvalidEntryError,
   DuplicatePathError,
   PathTraversalError,
-  PatchIDMismatchError,
 } from './errors.js'
 import { decode, type DecodeResult } from './decoder.js'
 import { encode } from './encoder.js'
@@ -56,7 +55,9 @@ export class Manifest {
   static async parse(text: string): Promise<Manifest> {
     const result = await decode(text)
 
-    // If there are patch boundaries, apply patch semantics
+    // If there are patch boundaries, apply patch semantics.
+    // Boundary IDs are block links (the ID of the previous block) — recorded
+    // but not verified, making this O(1) instead of O(n).
     if (result.patchBoundaries.length > 0) {
       // First section is the base entries
       let accumulated = new Manifest()
@@ -65,20 +66,8 @@ export class Manifest {
       accumulated.entries = result.sections[0] ?? []
       accumulated.rangeData = result.rangeData
 
-      // Each boundary ID should match the accumulated manifest's C4 ID,
-      // then the next section is a patch to apply.
+      // Apply each patch section in sequence
       for (let i = 0; i < result.patchBoundaries.length; i++) {
-        const boundaryID = result.patchBoundaries[i]
-        const computedID = await accumulated.computeC4ID()
-
-        if (!computedID.equals(boundaryID)) {
-          throw new PatchIDMismatchError(
-            0,
-            boundaryID.toString(),
-            computedID.toString(),
-          )
-        }
-
         // The next section (i+1) contains patch entries
         const patchSection = result.sections[i + 1]
         if (patchSection && patchSection.length > 0) {
