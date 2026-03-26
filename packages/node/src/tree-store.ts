@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir, rm, stat, rename as fsRename } from 'node:f
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import type { C4ID } from '../../core/src/id.js'
-import { identifyBytes } from '../../core/src/id.js'
+import { identifyContent, tryCanonicalizeC4m } from '../../core/src/identify-content.js'
 import { bytesToStream, streamToBytes } from '../../core/src/filesystem.js'
 import type { Store } from '../../core/src/store.js'
 import { ContentNotFoundError } from '../../core/src/store.js'
@@ -40,8 +40,15 @@ export class TreeStore implements Store {
   }
 
   async put(data: ReadableStream<Uint8Array> | Uint8Array): Promise<C4ID> {
-    const bytes = data instanceof Uint8Array ? data : await streamToBytes(data)
-    const id = await identifyBytes(bytes)
+    let bytes = data instanceof Uint8Array ? data : await streamToBytes(data)
+
+    // If content parses as c4m, store the canonical form
+    const canonical = await tryCanonicalizeC4m(bytes)
+    if (canonical) {
+      bytes = canonical
+    }
+
+    const id = await identifyContent(bytes)
     if (await this.has(id)) return id
 
     const dir = this.idToDir(id)
