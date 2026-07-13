@@ -12,6 +12,7 @@ import {
   InvalidEntryError,
   DuplicatePathError,
   PathTraversalError,
+  PatchIDMismatchError,
 } from './errors.js'
 import { decode, type DecodeResult } from './decoder.js'
 import { encode } from './encoder.js'
@@ -55,27 +56,63 @@ export class Manifest {
   static async parse(text: string): Promise<Manifest> {
     const result = await decode(text)
 
-    // If there are patch boundaries, apply patch semantics.
-    // Boundary IDs are block links (the ID of the previous block) — recorded
-    // but not verified, making this O(1) instead of O(n).
+    // Chain grammar (SPECIFICATION.md "The Closing Validator", C4M-STANDARD
+    // §10.3/§10.5): a bare C4 ID after entries is a checkpoint naming the
+    // ACCUMULATED manifest state — never the preceding block's text. As the
+    // resolving decoder, parse() folds the sections and MUST verify each
+    // checkpoint against the accumulated C4 ID, rejecting on mismatch
+    // (PatchIDMismatchError). A bare C4 ID at EOF is the closing validator,
+    // verified identically; consecutive checkpoints each name the same state
+    // and each verify. Verification is skipped only when the stream opens with
+    // an external base reference (§10.2): the accumulated state is unknowable
+    // without fetching the base, so it defers to that resolver.
     if (result.patchBoundaries.length > 0) {
-      // First section is the base entries
+      const skipVerify = result.base !== null
+      const numBoundaries = result.patchBoundaries.length
+
+      // Section 0 is the base state the first checkpoint names.
       let accumulated = new Manifest()
       accumulated.version = result.version
       accumulated.base = result.base
       accumulated.entries = result.sections[0] ?? []
       accumulated.rangeData = result.rangeData
 
-      // Apply each patch section in sequence
-      for (let i = 0; i < result.patchBoundaries.length; i++) {
-        // The next section (i+1) contains patch entries
-        const patchSection = result.sections[i + 1]
-        if (patchSection && patchSection.length > 0) {
-          const patchManifest = new Manifest()
-          patchManifest.entries = patchSection
-          accumulated = applyPatch(accumulated, patchManifest)
+      for (let i = 0; i < numBoundaries; i++) {
+        // Sections after the first are patches: fold section i in before
+        // verifying checkpoint i, which names the post-patch accumulated state.
+        if (i >= 1) {
+          const patchSection = result.sections[i]
+          if (patchSection && patchSection.length > 0) {
+            const patchManifest = new Manifest()
+            patchManifest.entries = patchSection
+            accumulated = applyPatch(accumulated, patchManifest)
+          }
+          accumulated.base = result.base
           accumulated.rangeData = result.rangeData
         }
+
+        if (!skipVerify) {
+          const got = await accumulated.computeC4ID()
+          const want = result.patchBoundaries[i]
+          if (got.toString() !== want.toString()) {
+            throw new PatchIDMismatchError(
+              result.boundaryLines[i] ?? 0,
+              got.toString(),
+              want.toString(),
+            )
+          }
+        }
+      }
+
+      // A trailing section past the last checkpoint is an unclosed final patch
+      // (Section 10.7): applied, but verified by no checkpoint.
+      const trailing = result.sections[numBoundaries]
+      if (trailing && trailing.length > 0) {
+        const patchManifest = new Manifest()
+        patchManifest.entries = trailing
+        accumulated = applyPatch(accumulated, patchManifest)
+        accumulated.base = result.base
+        accumulated.rangeData = result.rangeData
       }
 
       return accumulated

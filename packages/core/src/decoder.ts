@@ -10,7 +10,6 @@ import {
 import { unsafeName } from './safename.js'
 import {
   InvalidEntryError,
-  EmptyPatchError,
 } from './errors.js'
 import type { Manifest } from './manifest.js'
 
@@ -382,15 +381,19 @@ function parseEntryFromLine(
  * Returns the raw components; the Manifest class assembles them.
  *
  * When patch boundaries (bare C4 IDs between entry sections) are present,
- * sections and patchBoundaries are populated so that Manifest.parse() can
- * verify each boundary and apply patch semantics.
+ * sections and patchBoundaries are populated so that Manifest.parse() — the
+ * resolving decoder — can verify each checkpoint against the accumulated
+ * state and apply patch semantics. This shape-level reader records the
+ * boundaries unverified (per the 2026-07-13 chain-grammar erratum, a
+ * non-resolving reader MAY do so).
  */
 export interface DecodeResult {
   version: string
   base: C4ID | null
   entries: Entry[]
-  sections: Entry[][]       // each section between patch boundaries
-  patchBoundaries: C4ID[]   // the bare C4 IDs between sections
+  sections: Entry[][]       // each section preceding a patch boundary (may be empty)
+  patchBoundaries: C4ID[]   // the bare C4 ID checkpoints between/after sections
+  boundaryLines: number[]   // 1-based line number of each checkpoint (for diagnostics)
   rangeData: Map<string, string>  // C4ID string -> inline ID list
 }
 
@@ -403,6 +406,7 @@ export async function decode(text: string): Promise<DecodeResult> {
     entries: [],
     sections: [],
     patchBoundaries: [],
+    boundaryLines: [],
     rangeData: new Map(),
   }
 
@@ -432,20 +436,21 @@ export async function decode(text: string): Promise<DecodeResult> {
       continue
     }
 
-    // Check for bare C4 ID
+    // Check for bare C4 ID (patch boundary / checkpoint / closing validator).
     if (isBareC4ID(trimmed)) {
       const id = parseC4ID(trimmed)
 
       if (firstLine && section.length === 0) {
+        // First non-blank line: external base reference (Section 10.2).
         result.base = id
       } else {
-        if (patchMode && section.length === 0) {
-          throw new EmptyPatchError(`line ${lineNum}`)
-        }
-
-        // Save the current section and the boundary ID
+        // A bare C4 ID after entries is a checkpoint naming the accumulated
+        // state. Consecutive checkpoints and a closing validator at EOF are
+        // legal (2026-07-13 erratum); the (possibly empty) section preceding
+        // each boundary is recorded so Manifest.parse's fold stays aligned.
         result.sections.push(section)
         result.patchBoundaries.push(id)
+        result.boundaryLines.push(lineNum)
         section = []
         patchMode = true
       }
@@ -464,10 +469,9 @@ export async function decode(text: string): Promise<DecodeResult> {
     firstLine = false
   }
 
-  // Flush remaining section
-  if (patchMode && section.length === 0) {
-    throw new EmptyPatchError('at end of input')
-  }
+  // Flush remaining section. A stream may end with a closing validator (its
+  // last line was a bare C4 ID, already recorded above with an empty trailing
+  // section) or with an unclosed final patch (Section 10.7). Both are legal.
   if (section.length > 0) {
     result.sections.push(section)
   }
