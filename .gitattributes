@@ -1,0 +1,2 @@
+# Byte-stable cross-implementation contract fixtures: no EOL conversion.
+packages/core/tests/fixtures/chain-vector/* -text
