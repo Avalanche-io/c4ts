@@ -1,6 +1,6 @@
 {
   "name": "@avalanche-io/c4",
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "C4 Universal Content Identification — TypeScript implementation",
   "license": "Apache-2.0",
   "type": "module",
