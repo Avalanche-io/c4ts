@@ -119,3 +119,42 @@ describe('naturalLess', () => {
     })
   })
 })
+
+// The conformance vectors shared with c4 (Go) and c4py: digit runs of 17,
+// 20, 21 and 39 digits. A double keeps 15-16 digits, so parsing runs into
+// numbers made two different 17-digit runs compare equal and the sorted
+// order depend on the input order (one tree, more than one ID).
+import { readFileSync } from 'node:fs'
+
+describe('natural sort conformance vectors', () => {
+  const vectors = JSON.parse(
+    readFileSync(new URL('./vectors/natural_sort_vectors.json', import.meta.url), 'utf8'),
+  ).sorted as string[]
+
+  it('orders every pair as the vectors say', () => {
+    for (let i = 0; i < vectors.length; i++) {
+      expect(naturalLess(vectors[i], vectors[i])).toBe(false)
+      for (let j = i + 1; j < vectors.length; j++) {
+        expect(naturalLess(vectors[i], vectors[j]), `${vectors[i]} < ${vectors[j]}`).toBe(true)
+        expect(naturalLess(vectors[j], vectors[i]), `!(${vectors[j]} < ${vectors[i]})`).toBe(false)
+      }
+    }
+  })
+
+  it('sorts every permutation to the same order', () => {
+    let seed = 1
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648
+      return seed / 2147483648
+    }
+    for (let round = 0; round < 200; round++) {
+      const names = [...vectors]
+      for (let i = names.length - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1))
+        ;[names[i], names[j]] = [names[j], names[i]]
+      }
+      names.sort((a, b) => (naturalLess(a, b) ? -1 : naturalLess(b, a) ? 1 : 0))
+      expect(names).toEqual(vectors)
+    }
+  })
+})
