@@ -43,8 +43,16 @@ export function diff(oldManifest: Manifest, newManifest: Manifest): DiffResult {
   return result
 }
 
-/** Check if two entries are identical (all fields match). */
+/**
+ * Check if two entries are identical. As in the Go reference, when both
+ * carry a C4 ID the entries are equal by identity and mode alone — a
+ * directory's own mtime, or a file's, is not a modification when the
+ * content it names is unchanged. Otherwise every canonical field must match.
+ */
 function entriesEqual(a: Entry, b: Entry): boolean {
+  if (a.c4id && b.c4id && !a.c4id.isNil() && !b.c4id.isNil()) {
+    return a.c4id.equals(b.c4id) && a.mode === b.mode && a.modeType === b.modeType
+  }
   return canonicalEntry(a) === canonicalEntry(b)
 }
 

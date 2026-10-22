@@ -187,6 +187,8 @@ const changes = diff(oldManifest, newManifest)
 // changes.added    -- [{ path, entry }]
 // changes.removed  -- [{ path, entry }]
 // changes.modified -- [{ path, oldEntry, newEntry }]
+// Entries that both carry a C4 ID compare by ID and mode (as in the Go
+// reference); a timestamp-only change to identical content is not a change.
 
 // Three-way merge
 const result = merge(base, local, remote)
@@ -281,7 +283,7 @@ The `ContentSource` interface is broader than `Store` -- any object that serves 
 
 ### Scanner
 
-Walks a filesystem directory and builds a sorted Manifest with C4 IDs.
+Walks a filesystem directory and builds a sorted Manifest with C4 IDs. Directories are resolved bottom-up exactly as the Go CLI does: each keeps its own mtime, its size is its children's sizes plus the bytes of their canonical listing, and its C4 ID is the ID of that one-level listing — so `scan()` + `encode()` is byte-identical to `c4 id <dir>`.
 
 ```typescript
 import { scan } from '@avalanche-io/c4'
