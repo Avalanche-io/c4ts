@@ -1,7 +1,7 @@
 import type { FileSystem } from './filesystem.js'
 import type { Store } from './store.js'
 import { Manifest } from './manifest.js'
-import { createEntry } from './entry.js'
+import { type Entry, createEntry, NULL_SIZE } from './entry.js'
 import { identifyContent } from './identify-content.js'
 import { streamToBytes, joinPath } from './filesystem.js'
 
@@ -23,8 +23,12 @@ export interface ScanOptions {
  * Scan a filesystem directory into a Manifest.
  *
  * Walks the directory tree rooted at rootPath, reads each file,
- * computes its C4 ID, and builds a sorted Manifest with proper
- * directory metadata propagated bottom-up.
+ * computes its C4 ID, and builds a sorted Manifest. Directories are
+ * resolved bottom-up from their already-resolved direct children, as
+ * the Go scanner does: a directory keeps its own mtime, its size is the
+ * children's sizes plus the bytes of their canonical one-level listing,
+ * and its C4 ID is the ID of that listing (identical to
+ * `manifest.filter(<direct children>).computeC4ID()`).
  */
 export async function scan(
   fs: FileSystem,
@@ -46,9 +50,6 @@ export async function scan(
     counter: { value: 0 },
   })
 
-  // Propagate directory sizes and timestamps bottom-up.
-  manifest.canonicalize()
-
   // Sort entries (files before dirs, natural sort).
   manifest.sortEntries()
 
@@ -65,7 +66,10 @@ interface WalkState {
   counter: { value: number }
 }
 
-/** Recursively walk a directory, adding entries to the manifest. */
+/**
+ * Recursively walk a directory, adding entries to the manifest.
+ * Returns the directory's direct children, fully resolved.
+ */
 async function walkDir(
   fs: FileSystem,
   rootPath: string,
@@ -73,7 +77,7 @@ async function walkDir(
   depth: number,
   manifest: Manifest,
   state: WalkState,
-): Promise<void> {
+): Promise<Entry[]> {
   const absDir = relDir ? joinPath(rootPath, relDir) : rootPath
 
   // Collect dir entries so we can process files first, then recurse.
@@ -92,6 +96,8 @@ async function walkDir(
       files.push({ name: dirEntry.name, relPath })
     }
   }
+
+  const children: Entry[] = []
 
   // Process files.
   for (const file of files) {
@@ -123,6 +129,7 @@ async function walkDir(
     })
 
     manifest.addEntry(entry)
+    children.push(entry)
 
     state.counter.value++
     state.progress?.(file.relPath, state.counter.value)
@@ -136,18 +143,40 @@ async function walkDir(
     const mode = stat.mode & 0o7777
     const dirName = dir.name.endsWith('/') ? dir.name : dir.name + '/'
 
-    // Directory entry — size and timestamp will be propagated later.
+    // Directory entry: it keeps its own mtime; size and C4 ID are
+    // resolved from the direct children once they are scanned.
     const entry = createEntry({
       mode,
       modeType: 'd',
-      timestamp: new Date(0),
-      size: -1,
+      timestamp: stat.mtime,
+      size: NULL_SIZE,
       name: dirName,
       depth,
     })
 
     manifest.addEntry(entry)
+    children.push(entry)
 
-    await walkDir(fs, rootPath, dir.relPath + '/', depth + 1, manifest, state)
+    const direct = await walkDir(fs, rootPath, dir.relPath + '/', depth + 1, manifest, state)
+    await resolveDir(entry, direct, state.computeIds)
   }
+
+  return children
+}
+
+/**
+ * Resolve a directory entry from its fully-resolved direct children:
+ * first its null size (canonical propagation over [self, children]),
+ * then its C4 ID — the ID of the children's canonical one-level listing.
+ * An empty directory has size 0 and the ID of the empty string.
+ */
+async function resolveDir(dir: Entry, children: Entry[], computeIds: boolean): Promise<void> {
+  const scope = Manifest.create()
+  scope.entries = [dir, ...children]
+  scope.canonicalize()
+
+  if (!computeIds) return
+  const listing = Manifest.create()
+  listing.entries = children
+  dir.c4id = await listing.computeC4ID()
 }
