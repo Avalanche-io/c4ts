@@ -691,6 +691,35 @@ describe('Workspace', () => {
     expect(d.modified[0].path).toBe('file.txt')
   })
 
+  it('diffFromCurrent is clean after checkout and reset of a tree with directories', async () => {
+    const fs = new MemoryFS()
+    const store = new MemoryStore()
+    await fs.mkdir('project/sub/deep', { recursive: true })
+    await fs.writeText('project/top.txt', 'top')
+    await fs.writeText('project/sub/mid.txt', 'mid')
+    await fs.writeText('project/sub/deep/leaf.txt', 'leaf')
+    const original = await scan(fs, 'project', { store })
+
+    await fs.mkdir('work')
+    const ws = new Workspace('work', fs, store)
+    await ws.checkout(original)
+
+    // Directory entries in work/ have their own (newer) mtimes; the
+    // content they name is identical, so nothing is modified.
+    const d = await ws.diffFromCurrent()
+    expect(d.modified.map(x => x.path)).toEqual([])
+    expect(d.added.length).toBe(0)
+    expect(d.removed.length).toBe(0)
+
+    await fs.writeText('work/sub/deep/leaf.txt', 'changed')
+    const d2 = await ws.diffFromCurrent()
+    expect(d2.modified.map(x => x.path).sort()).toEqual(['sub/', 'sub/deep/', 'sub/deep/leaf.txt'])
+
+    await ws.reset()
+    const d3 = await ws.diffFromCurrent()
+    expect(d3.modified.map(x => x.path)).toEqual([])
+  })
+
   it('diffFromCurrent throws when no manifest checked out', async () => {
     const fs = new MemoryFS()
     const store = new MemoryStore()
