@@ -25,9 +25,15 @@ function formatTimestampPretty(d: Date): string {
   const m = d.getMinutes().toString().padStart(2, '0')
   const s = d.getSeconds().toString().padStart(2, '0')
   const year = d.getFullYear()
-  // Get timezone abbreviation
-  const tzMatch = d.toTimeString().match(/\(([^)]+)\)/)
-  const tz = tzMatch ? tzMatch[1].split(' ').map(w => w[0]).join('') : 'UTC'
+  // The zone as a numeric offset (+0000, -0600), which every JavaScript
+  // runtime and the Go reference decoder parse in any zone. An
+  // abbreviation guessed from the zone's long name ("CUT" for Coordinated
+  // Universal Time, "CEST") is not parseable, so a pretty-printed c4m
+  // written under such a zone did not round-trip to its own C4 ID.
+  const offset = -d.getTimezoneOffset()
+  const sign = offset < 0 ? '-' : '+'
+  const abs = Math.abs(offset)
+  const tz = `${sign}${Math.floor(abs / 60).toString().padStart(2, '0')}${(abs % 60).toString().padStart(2, '0')}`
   return `${month} ${day} ${h}:${m}:${s} ${year} ${tz}`
 }
 
