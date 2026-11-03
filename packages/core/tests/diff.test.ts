@@ -184,6 +184,42 @@ describe('applyPatch', () => {
     expect(base.entries.length).toBe(1)
     expect(base.entries[0].name).toBe('a.txt')
   })
+
+  it('deepens a directory restated identically with a child under it (erratum 2026-07-31)', () => {
+    const base = buildManifest([
+      { name: 'a.txt', size: 10 },
+      { name: 'docs/', size: 0 },
+      { name: 'readme.md', size: 6, depth: 1 },
+    ])
+    // The directory line is restated unchanged, as a breadth-first scan
+    // must, and a new child follows it: a deepening, not a removal.
+    const patch = buildManifest([
+      { name: 'docs/', size: 0 },
+      { name: 'guide.md', size: 5, depth: 1 },
+    ])
+    const result = applyPatch(base, patch)
+    const paths: string[] = []
+    for (const [path] of result) paths.push(path)
+    expect(paths.sort()).toEqual(['a.txt', 'docs/', 'docs/guide.md', 'docs/readme.md'])
+  })
+
+  it('removes a directory and every descendant when it is restated alone', () => {
+    const base = buildManifest([
+      { name: 'a.txt', size: 10 },
+      { name: 'docs/', size: 0 },
+      { name: 'readme.md', size: 6, depth: 1 },
+      { name: 'sub/', size: 0, depth: 1 },
+      { name: 'deep.md', size: 4, depth: 2 },
+    ])
+    const patch = buildManifest([{ name: 'docs/', size: 0 }])
+    const result = applyPatch(base, patch)
+    // The resolved entries, not only the root ID, equal the expected state:
+    // no orphan survives under a removed directory.
+    const paths: string[] = []
+    for (const [path] of result) paths.push(path)
+    expect(paths).toEqual(['a.txt'])
+    expect(result.entries.map(e => e.name)).toEqual(['a.txt'])
+  })
 })
 
 describe('patchDiff', () => {

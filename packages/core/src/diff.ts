@@ -152,37 +152,63 @@ function applyChange(m: Manifest, path: string, entry: Entry): void {
 }
 
 /** Apply a patch manifest to a base manifest.
- * Patch semantics:
- * - Entry exists only in patch: addition
- * - Entry exists in both, any field differs: modification (patch replaces)
- * - Entry exists in both, all fields identical: removal
+ * Patch semantics, matched by full path (SPECIFICATION.md "Patch Entry
+ * Semantics", erratum 2026-07-31):
+ * - Path exists only in patch: addition
+ * - Path exists in both, any field differs: modification (patch replaces)
+ * - Path exists in both, all fields identical, no child follows it in the
+ *   patch: removal, of the entry and of every descendant under it
+ * - Path exists in both, all fields identical, a child follows it in the
+ *   patch: deepening — the entry is unchanged and the children are applied
+ *
+ * A restatement that declares children is not removing their parent.
+ * Breadth-first discovery learns a directory's children before it learns
+ * anything about the directory itself, so the parent line is necessarily
+ * restated unchanged before them; reading that as a removal silently
+ * discarded the directory, the children just declared, and everything the
+ * patch never mentioned beneath it. To remove a subtree, restate the
+ * directory alone.
  */
 export function applyPatch(base: Manifest, patch: Manifest): Manifest {
   const result = base.copy()
 
-  for (const patchEntry of patch.entries) {
-    // Find matching entry in result by name and depth
-    let found = false
-    for (let i = 0; i < result.entries.length; i++) {
-      const existing = result.entries[i]
-      if (existing.name === patchEntry.name && existing.depth === patchEntry.depth) {
-        if (entriesEqual(existing, patchEntry)) {
-          // Identical = removal
-          result.entries.splice(i, 1)
-        } else {
-          // Different = modification
-          result.entries[i] = { ...patchEntry }
-        }
-        found = true
-        break
-      }
-    }
-    if (!found) {
-      // Addition
-      result.entries.push({ ...patchEntry })
-    }
+  // Insertion-ordered path map of the base; sortEntries restores tree order.
+  const byPath = new Map<string, Entry>()
+  for (const [path, entry] of result) {
+    byPath.set(path, entry)
   }
 
+  const patchPaths: string[] = []
+  for (const [path] of patch) {
+    patchPaths.push(path)
+  }
+  const declaresChildren = (dirPath: string): boolean =>
+    patchPaths.some(p => p !== dirPath && p.startsWith(dirPath))
+
+  for (const [path, patchEntry] of patch) {
+    const existing = byPath.get(path)
+    if (existing && entriesEqual(existing, patchEntry)) {
+      if (isDir(patchEntry) && declaresChildren(path)) {
+        // Deepening: the directory stays as the base holds it; its
+        // children are applied by their own lines.
+        continue
+      }
+      // Removal: the entry and, for a directory, everything under it.
+      // Directory paths end in '/', so the prefix names exactly its subtree.
+      byPath.delete(path)
+      if (isDir(existing)) {
+        for (const p of Array.from(byPath.keys())) {
+          if (p.startsWith(path)) byPath.delete(p)
+        }
+      }
+      continue
+    }
+    // Modification, or addition.
+    byPath.set(path, { ...patchEntry })
+  }
+
+  result.entries = Array.from(byPath.values())
+  result.invalidateIndex()
   result.sortEntries()
   return result
 }
