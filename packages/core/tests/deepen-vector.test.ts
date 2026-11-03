@@ -27,17 +27,6 @@ const load = (name: string): Promise<string> => readFile(fixture(name), 'utf8')
 
 const isBareID = (line: string): boolean => line.length === 90 && line.startsWith('c4')
 
-// The fixtures end with a closing validator: a bare ID at EOF naming the
-// resolved state. The 1.0.x grammar has no closing validator and reads one
-// as an empty patch section, so it is dropped before decoding here; the ID
-// file it repeats is what the resolved manifest is checked against. The
-// fixture bytes stay identical to every other implementation's copy.
-function withoutClosingValidator(text: string): string {
-  const lines = text.replace(/\n+$/, '').split('\n')
-  if (isBareID(lines[lines.length - 1])) lines.pop()
-  return lines.join('\n') + '\n'
-}
-
 const cases = [
   { file: 'deepen.c4m', idFile: 'deepen-root-id.txt', want: ['a.txt', 'docs/', 'guide.md', 'readme.md'] },
   { file: 'remove.c4m', idFile: 'remove-root-id.txt', want: ['a.txt'] },
@@ -45,9 +34,13 @@ const cases = [
 
 describe('deepen-vector conformance (removal-rule erratum 2026-07-31)', () => {
   it('resolves each fixture to exactly the pinned entries and root ID', async () => {
+    // The decoder verifies the interior checkpoint and the closing
+    // validator; an implementation carrying the old rule surfaces as a
+    // checkpoint mismatch here. The entry set is checked as well, since a
+    // non-verifying reader would simply return the wrong manifest.
     const ids: Record<string, string> = {}
     for (const c of cases) {
-      const text = withoutClosingValidator(await load(c.file))
+      const text = await load(c.file)
       const expectedID = (await load(c.idFile)).trim()
       const m = await Manifest.parse(text)
       expect(m.entries.map(e => e.name).sort(), c.file).toEqual(c.want)
