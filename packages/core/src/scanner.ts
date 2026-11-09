@@ -1,7 +1,7 @@
 import type { FileSystem } from './filesystem.js'
 import type { Store } from './store.js'
 import { Manifest } from './manifest.js'
-import { type Entry, createEntry, NULL_SIZE } from './entry.js'
+import { type Entry, createEntry, knownMode, MODE_PERM_MASK, NULL_SIZE } from './entry.js'
 import { identifyContent } from './identify-content.js'
 import { streamToBytes, joinPath } from './filesystem.js'
 
@@ -105,7 +105,8 @@ async function walkDir(
     const stat = await fs.stat(fullPath)
 
     const modeType = stat.isSymlink ? 'l' : '-'
-    const mode = stat.mode & 0o7777
+    // A mode read from disk is known: a chmod-000 file is ZERO_MODE, not null.
+    const mode = knownMode(stat.mode & MODE_PERM_MASK)
 
     let c4id = null
     if (state.computeIds) {
@@ -140,7 +141,7 @@ async function walkDir(
     const fullPath = joinPath(rootPath, dir.relPath)
     const stat = await fs.stat(fullPath)
 
-    const mode = stat.mode & 0o7777
+    const mode = knownMode(stat.mode & MODE_PERM_MASK)
     const dirName = dir.name.endsWith('/') ? dir.name : dir.name + '/'
 
     // Directory entry: it keeps its own mtime; size and C4 ID are
@@ -171,12 +172,17 @@ async function walkDir(
  * An empty directory has size 0 and the ID of the empty string.
  */
 async function resolveDir(dir: Entry, children: Entry[], computeIds: boolean): Promise<void> {
+  // The ID first: the scanner read this directory, so an empty one carries
+  // the empty-listing ID, which is what tells propagation it is empty (size
+  // 0) rather than unread (a childless directory with no ID keeps a null
+  // size). The children are final, so their listing is too.
+  if (computeIds) {
+    const listing = Manifest.create()
+    listing.entries = children
+    dir.c4id = await listing.computeC4ID()
+  }
+
   const scope = Manifest.create()
   scope.entries = [dir, ...children]
   scope.canonicalize()
-
-  if (!computeIds) return
-  const listing = Manifest.create()
-  listing.entries = children
-  dir.c4id = await listing.computeC4ID()
 }

@@ -6,6 +6,7 @@ import {
   hasNullValues,
   canonicalEntry,
   FlowDirection,
+  NULL_SIZE,
 } from './entry.js'
 import { naturalLess } from './naturalsort.js'
 import {
@@ -494,7 +495,14 @@ function propagateMetadata(entries: Entry[]): void {
 
     const children = getDirectoryChildren(entries, entry)
     if (needsSize) {
-      entry.size = calculateDirectorySize(children)
+      // A directory with no listed children is empty (size 0) only when
+      // its ID says so: an empty listing hashes to the empty-content ID.
+      // A childless directory with no ID is one nobody read (a chmod 000
+      // directory in a scan, or a hand-written line): its size stays null,
+      // because 0 beside no ID would assert an emptiness nobody saw
+      // (SPECIFICATION.md "Empty and Unread Directories", 2026-11-09).
+      const unread = children.length === 0 && (!entry.c4id || entry.c4id.isNil())
+      entry.size = unread ? NULL_SIZE : calculateDirectorySize(children)
     }
     if (needsTimestamp) {
       entry.timestamp = getMostRecentModtime(children)

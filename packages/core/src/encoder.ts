@@ -2,6 +2,7 @@ import type { Manifest } from './manifest.js'
 import {
   type Entry,
   formatMode,
+  isNullMode,
   formatSizeWithCommas,
   formatEntry,
   flowOperator,
@@ -48,9 +49,7 @@ function calculateC4IDColumn(entries: Entry[], indentWidth: number): number {
   let maxLen = 0
   for (const entry of entries) {
     const indent = ' '.repeat(entry.depth * indentWidth)
-    const modeStr = entry.mode === 0 && entry.modeType === '-'
-      ? '----------'
-      : formatMode(entry.modeType, entry.mode)
+    const modeStr = isNullMode(entry.mode) ? '-' : formatMode(entry.modeType, entry.mode)
     const timeStr = formatTimestampPretty(entry.timestamp)
     const nameStr = formatName(entry.name, entry.isSequence)
 
@@ -78,9 +77,8 @@ function formatEntryPretty(
   indentWidth: number,
 ): string {
   const indent = ' '.repeat(entry.depth * indentWidth)
-  const modeStr = entry.mode === 0 && entry.modeType === '-'
-    ? '----------'
-    : formatMode(entry.modeType, entry.mode)
+  // Null mode is "-" in pretty form too; the known zero is ten dashes.
+  const modeStr = isNullMode(entry.mode) ? '-' : formatMode(entry.modeType, entry.mode)
 
   const timeStr = entry.timestamp.getTime() === 0
     ? '-                        '

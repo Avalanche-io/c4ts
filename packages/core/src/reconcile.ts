@@ -4,7 +4,7 @@ import type { FileSystem } from './filesystem.js'
 import { streamToBytes, bytesToStream, joinPath } from './filesystem.js'
 import type { Store } from './store.js'
 import type { Manifest } from './manifest.js'
-import { type Entry, isDir } from './entry.js'
+import { type Entry, isDir, isNullMode, permBits } from './entry.js'
 
 /** Types of operations the reconciler can perform. */
 export type ReconcileOpType = 'mkdir' | 'create' | 'update' | 'remove' | 'rmdir'
@@ -174,10 +174,13 @@ export async function apply(
             const stream = await store.get(op.entry.c4id)
             await fs.writeFile(fullPath, stream)
           }
-          // Apply metadata if supported
+          // Apply metadata if supported. A null mode is never applied: an
+          // existing file keeps its mode and a created one takes the
+          // platform default (SPECIFICATION.md "Materializing null
+          // metadata"). The known zero applies as 0000.
           if (op.entry && fs.setMeta) {
             await fs.setMeta(fullPath, {
-              mode: op.entry.mode,
+              mode: isNullMode(op.entry.mode) ? undefined : permBits(op.entry.mode),
               mtime: op.entry.timestamp,
             })
           }

@@ -26,6 +26,11 @@ export {
   formatSizeWithCommas,
   NULL_TIMESTAMP,
   NULL_SIZE,
+  ZERO_MODE,
+  MODE_PERM_MASK,
+  knownMode,
+  isNullMode,
+  permBits,
 } from './entry.js'
 
 // c4m Manifest

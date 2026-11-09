@@ -325,12 +325,11 @@ function parseEntryFromLine(
     throw new InvalidEntryError(`line ${lineNum}: line too short`)
   }
 
+  // "-" is null (mode 0); every ten-character mode is known, "----------"
+  // included (ZERO_MODE, via parseMode).
   let modeType = '-'
   let mode = 0
-  if (modeStr === '-' || modeStr === '----------') {
-    modeType = '-'
-    mode = 0
-  } else {
+  if (modeStr !== '-') {
     ;[modeType, mode] = parseMode(modeStr)
   }
 
@@ -363,6 +362,13 @@ function parseEntryFromLine(
 
   // Parse remaining fields
   const fields = parseEntryFields(remaining, mode, modeType)
+
+  // Ten dashes on a directory can only be a legacy null: a correct encoder
+  // writes a zero-permission directory as "d---------", and encoders
+  // through c4 1.0.21 wrote null as ten dashes in pretty form.
+  if (modeStr === '----------' && fields.name.endsWith('/')) {
+    mode = 0
+  }
 
   const entry = createEntry({
     depth,

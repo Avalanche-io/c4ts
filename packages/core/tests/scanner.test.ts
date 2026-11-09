@@ -117,12 +117,19 @@ describe('scan resolves directories bottom-up', () => {
   })
 
   it('computeIds: false resolves sizes but leaves IDs null, as Go metadata mode does', async () => {
+    // Measured against the Go CLI (`c4 id -m metadata`, 2026-11-09): a
+    // directory with listed children gets its size; a childless directory
+    // with no ID keeps a null size, since 0 beside no ID would assert an
+    // emptiness the description cannot show (SPECIFICATION.md "Empty and
+    // Unread Directories"). Only full mode, which carries the
+    // empty-listing ID, can say a directory is empty.
     const m = await scan(await seed(), 'root', { computeIds: false })
-    for (const [, e] of m) {
-      expect(e.c4id).toBeNull()
-      expect(e.size).toBeGreaterThanOrEqual(0)
+    for (const [path, e] of m) {
+      expect(e.c4id, path).toBeNull()
+      if (path === 'empty/') continue
+      expect(e.size, path).toBeGreaterThanOrEqual(0)
     }
-    expect(m.get('empty/')!.size).toBe(0)
+    expect(m.get('empty/')!.size).toBe(-1)
     expect(isDir(m.get('docs/')!)).toBe(true)
   })
 })

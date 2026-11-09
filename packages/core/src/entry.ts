@@ -18,9 +18,41 @@ export const NULL_TIMESTAMP = new Date(0)
 /** Sentinel for null/unspecified size. */
 export const NULL_SIZE = -1
 
+/**
+ * The known zero mode: a regular file with no permission bits, written
+ * `----------`. It is not the null mode, which is `mode === 0` and is
+ * written `-`. The two differ for progressive resolution: null means not
+ * yet checked, zero means checked and found zero (SPECIFICATION.md "Null
+ * and Zero Values"). Bit 18 is set by no operating system mode and is
+ * removed by `permBits`, so ZERO_MODE acts as 0 everywhere a mode is
+ * applied. The same sentinel as the Go reference (`c4m.ZeroMode`).
+ */
+export const ZERO_MODE = 1 << 18
+
+/** The permission and special bits of a mode (setuid, setgid, sticky, rwx). */
+export const MODE_PERM_MASK = 0o7777
+
+/**
+ * Return a mode read from disk as a known mode: no on-disk mode is null,
+ * so an all-zero mode becomes ZERO_MODE.
+ */
+export function knownMode(mode: number): number {
+  return mode === 0 ? ZERO_MODE : mode
+}
+
+/** Returns true if the mode is null (unspecified). ZERO_MODE is not null. */
+export function isNullMode(mode: number): boolean {
+  return mode === 0
+}
+
+/** The bits a filesystem can apply: the mode without the ZERO_MODE sentinel. */
+export function permBits(mode: number): number {
+  return mode & MODE_PERM_MASK
+}
+
 /** A single file or directory entry in a c4m manifest. */
 export interface Entry {
-  mode: number          // Unix-style permissions (as numeric, e.g. 0o644)
+  mode: number          // Unix-style permissions (e.g. 0o644); 0 = null, ZERO_MODE = known zero
   modeType: string      // File type character: '-', 'd', 'l', 'p', 's', 'b', 'c'
   timestamp: Date       // UTC timestamp
   size: number          // File size in bytes, -1 = null
@@ -82,7 +114,7 @@ export function flowOperator(dir: FlowDirection): string {
 
 /** Returns true if entry has any null metadata values. */
 export function hasNullValues(e: Entry): boolean {
-  const hasNullMode = e.mode === 0 && e.modeType === '-'
+  const hasNullMode = isNullMode(e.mode)
   const hasNullTimestamp = e.timestamp.getTime() === 0
   const hasNullSize = e.size < 0
   return hasNullMode || hasNullTimestamp || hasNullSize
@@ -91,7 +123,7 @@ export function hasNullValues(e: Entry): boolean {
 /** Returns list of fields that have null values. */
 export function getNullFields(e: Entry): string[] {
   const fields: string[] = []
-  if (e.mode === 0 && e.modeType === '-') fields.push('Mode')
+  if (isNullMode(e.mode)) fields.push('Mode')
   if (e.timestamp.getTime() === 0) fields.push('Timestamp')
   if (e.size < 0) fields.push('Size')
   return fields
@@ -123,7 +155,10 @@ export function formatMode(modeType: string, mode: number): string {
   return buf.join('')
 }
 
-/** Parse a 10-char Unix mode string to [modeType, permBits]. */
+/**
+ * Parse a 10-char Unix mode string to [modeType, mode]. A ten-character
+ * mode is always known: all dashes is ZERO_MODE, never null.
+ */
 export function parseMode(s: string): [string, number] {
   if (s.length !== 10) {
     throw new Error(`mode must be 10 characters, got ${s.length}`)
@@ -148,7 +183,7 @@ export function parseMode(s: string): [string, number] {
   if (s[6] === 's' || s[6] === 'S') perm |= 0o2000
   if (s[9] === 't' || s[9] === 'T') perm |= 0o1000
 
-  return [modeType, perm]
+  return [modeType, knownMode(perm)]
 }
 
 // ---- Timestamp formatting/parsing ----
@@ -194,10 +229,11 @@ export function formatSizeWithCommas(size: number): string {
 export function formatEntry(e: Entry, indentWidth: number, displayFormat: boolean): string {
   const indent = ' '.repeat(e.depth * indentWidth)
 
-  // Mode
+  // Mode: null is "-" in every form, display included; the known zero
+  // (ZERO_MODE) formats as ten dashes.
   let modeStr: string
-  if (e.mode === 0 && e.modeType === '-') {
-    modeStr = displayFormat ? '----------' : '-'
+  if (isNullMode(e.mode)) {
+    modeStr = '-'
   } else {
     modeStr = formatMode(e.modeType, e.mode)
   }
@@ -248,9 +284,9 @@ export function formatEntry(e: Entry, indentWidth: number, displayFormat: boolea
 
 /** Format an entry in canonical form (no indentation, null mode as "-"). */
 export function canonicalEntry(e: Entry): string {
-  // No indentation
+  // No indentation. Null mode renders as "-"; the known zero as "----------".
   let modeStr: string
-  if (e.mode === 0 && e.modeType === '-') {
+  if (isNullMode(e.mode)) {
     modeStr = '-'
   } else {
     modeStr = formatMode(e.modeType, e.mode)
