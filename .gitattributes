@@ -1,3 +1,4 @@
 # Byte-stable cross-implementation contract fixtures: no EOL conversion.
 packages/core/tests/fixtures/chain-vector/* -text
 packages/core/tests/fixtures/deepen-vector/* -text
+packages/core/tests/fixtures/legacy/* -text

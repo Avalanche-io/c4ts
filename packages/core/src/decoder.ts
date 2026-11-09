@@ -94,20 +94,31 @@ function parseNameOrTarget(line: string, pos: number): [string, number, boolean]
       return [buf, pos, hasUnescapedBrackets]
     }
 
-    // Check for boundary: space followed by link operator, c4 prefix, or null
+    // Check for boundary: space(s) followed by link operator, c4 prefix, or
+    // null. Aligned (pretty) forms pad fields with runs of spaces, so the
+    // lookahead skips the whole run before testing (mirrors Go's
+    // parseNameOrTarget). Through 1.0.24 only one space was tested, so a
+    // pretty line whose C4 ID column is "-" read its padding into the name
+    // and a names-only pretty file matched nothing real (2026-11-09).
     if (ch === ' ') {
-      const rest = line.substring(pos)
-      if (rest.startsWith(' -> ') || rest.startsWith(' <- ') || rest.startsWith(' <> ')) {
+      let j = pos
+      while (j < n && line[j] === ' ') j++
+      const rest = line.substring(j)
+      if (rest === '') {
+        // Trailing padding: the name ended at the first space.
         return [buf, pos, hasUnescapedBrackets]
       }
-      // Hard link group: " ->N"
-      if (rest.length >= 4 && rest[1] === '-' && rest[2] === '>' && rest[3] >= '1' && rest[3] <= '9') {
+      if (rest.startsWith('-> ') || rest.startsWith('<- ') || rest.startsWith('<> ')) {
         return [buf, pos, hasUnescapedBrackets]
       }
-      if (rest.length > 2 && rest[1] === 'c' && rest[2] === '4') {
+      // Hard link group: "->N"
+      if (rest.length >= 3 && rest[0] === '-' && rest[1] === '>' && rest[2] >= '1' && rest[2] <= '9') {
         return [buf, pos, hasUnescapedBrackets]
       }
-      if (rest.length >= 2 && rest[1] === '-' && (rest.length === 2 || rest[2] === ' ')) {
+      if (rest.length >= 2 && rest[0] === 'c' && rest[1] === '4') {
+        return [buf, pos, hasUnescapedBrackets]
+      }
+      if (rest[0] === '-' && (rest.length === 1 || rest[1] === ' ')) {
         return [buf, pos, hasUnescapedBrackets]
       }
     }
