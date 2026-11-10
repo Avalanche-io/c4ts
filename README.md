@@ -198,6 +198,8 @@ const result = merge(base, local, remote)
 // Patch operations
 const { oldID, patch } = await patchDiff(oldManifest, newManifest)
 const patched = applyPatch(oldManifest, patch)
+// A patch is meaningful only over its own base (here oldManifest); applying
+// it to another tree needs the rule in c4 core's c4m/testdata/apply-from-vector.
 ```
 
 ### Content Store

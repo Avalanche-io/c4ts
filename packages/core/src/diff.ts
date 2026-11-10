@@ -168,6 +168,14 @@ function applyChange(m: Manifest, path: string, entry: Entry): void {
  * discarded the directory, the children just declared, and everything the
  * patch never mentioned beneath it. To remove a subtree, restate the
  * directory alone.
+ *
+ * A patch is meaningful only over its own base. Because removal is spelled
+ * by exact restatement, applying a patch to any other tree reads an
+ * addition that meets an identical entry as a removal. To carry a patch's
+ * changes to another tree, read each entry against the patch's base first,
+ * then apply what it means; the rule and the shared conformance vectors are
+ * in c4 core (c4m/testdata/apply-from-vector). Not implemented here until a
+ * caller needs it.
  */
 export function applyPatch(base: Manifest, patch: Manifest): Manifest {
   const result = base.copy()
