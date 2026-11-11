@@ -7,6 +7,7 @@ import {
   canonicalEntry,
   FlowDirection,
   isPathName,
+  NULL_SIZE,
 } from './entry.js'
 import { naturalLess } from './naturalsort.js'
 import {
@@ -448,6 +449,11 @@ export class Manifest {
 
 // ---- Metadata Propagation ----
 
+// The C4 ID of an empty listing: the ID of zero bytes. A directory with no
+// listed children and this ID is known to be empty.
+const EMPTY_LISTING_ID =
+  'c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT'
+
 function propagateMetadata(entries: Entry[]): void {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]
@@ -461,7 +467,21 @@ function propagateMetadata(entries: Entry[]): void {
 
     const children = getDirectoryChildren(entries, entry)
     if (needsSize) {
-      entry.size = calculateDirectorySize(children)
+      // A childless directory with a C4 ID other than the empty listing's
+      // is collapsed: its listing lives under that ID, not here, so its size
+      // cannot be derived and stays null. Through 1.0.26 any childless
+      // directory gave 0, an invented value computeC4ID then hashed
+      // (childless-dir vector). On this line a childless directory with no
+      // ID still gives 0, as the Go reference's 1.0.x line does: the scanner
+      // sizes a directory before it has an ID. Main keeps that size null, a
+      // known 1.0.x difference the vector's unread/ pins.
+      if (children.length === 0) {
+        const collapsed =
+          entry.c4id != null && !entry.c4id.isNil() && entry.c4id.toString() !== EMPTY_LISTING_ID
+        entry.size = collapsed ? NULL_SIZE : 0
+      } else {
+        entry.size = calculateDirectorySize(children)
+      }
     }
     if (needsTimestamp) {
       entry.timestamp = getMostRecentModtime(children)
