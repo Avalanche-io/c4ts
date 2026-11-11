@@ -6,8 +6,10 @@ import {
   formatEntry,
   flowOperator,
   FlowDirection,
+  isPathName,
 } from './entry.js'
 import { formatName, formatTarget } from './safename.js'
+import { PathTraversalError } from './errors.js'
 
 /** Encoder options. */
 export interface EncoderOptions {
@@ -118,6 +120,11 @@ function formatEntryPretty(
 
 /** Encode a manifest to c4m text. */
 export function encode(m: Manifest, options: EncoderOptions = {}): string {
+  // A name the format forbids is never written: every decoder refuses such
+  // a line (name-rule vector). Refused before anything is produced.
+  for (const entry of m.entries) {
+    if (isPathName(entry.name)) throw new PathTraversalError(entry.name)
+  }
   const pretty = options.pretty ?? false
   const indentWidth = options.indentWidth ?? 2
 

@@ -35,6 +35,20 @@ export interface Entry {
   pattern: string       // Original sequence pattern
 }
 
+/**
+ * True if `name` is a path, not a bare entry name. Only "/" separates paths
+ * in c4m, and a name may end in "/" only as a directory's marker: a name
+ * holding any other "/", and ".", "..", "./", "../", "/" and "", are path
+ * components (SPECIFICATION.md "Invalid names"; the shared name-rule
+ * vector). A backslash is a literal name character, never a separator.
+ * Go: c4m.isPathName.
+ */
+export function isPathName(name: string): boolean {
+  if (name === '') return true
+  const base = name.endsWith('/') ? name.slice(0, -1) : name
+  return base === '' || base === '.' || base === '..' || base.includes('/') || base.includes('\0')
+}
+
 /** Create a new Entry with defaults. */
 export function createEntry(partial: Partial<Entry> = {}): Entry {
   return {
