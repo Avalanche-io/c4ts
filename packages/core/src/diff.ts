@@ -56,6 +56,22 @@ function entriesEqual(a: Entry, b: Entry): boolean {
   return canonicalEntry(a) === canonicalEntry(b)
 }
 
+/**
+ * The patch identity rule (SPECIFICATION.md "Patch Entry Semantics": "All
+ * fields identical means: same name, mode, timestamp, size, C4 ID, and
+ * target"), as Go's entriesIdentical: the canonical lines match, so every
+ * field matches at the format's resolution. Patches use it in both
+ * directions: a restatement is a removal only when it is identical, and a
+ * patch restates every entry whose line differs. entriesEqual above is
+ * diff()'s looser "modified" test and must never decide either; through
+ * 1.0.25 it decided both, so a change of time alone was left out of the
+ * patches c4ts wrote, and a time-only restatement in a patch it read
+ * removed the file.
+ */
+function entriesIdentical(a: Entry, b: Entry): boolean {
+  return canonicalEntry(a) === canonicalEntry(b)
+}
+
 /** Merge result. */
 export interface MergeResult {
   merged: Manifest
@@ -195,7 +211,7 @@ export function applyPatch(base: Manifest, patch: Manifest): Manifest {
 
   for (const [path, patchEntry] of patch) {
     const existing = byPath.get(path)
-    if (existing && entriesEqual(existing, patchEntry)) {
+    if (existing && entriesIdentical(existing, patchEntry)) {
       if (isDir(patchEntry) && declaresChildren(path)) {
         // Deepening: the directory stays as the base holds it; its
         // children are applied by their own lines.
@@ -228,14 +244,33 @@ export interface PatchResult {
 }
 
 export async function patchDiff(oldManifest: Manifest, newManifest: Manifest): Promise<PatchResult> {
-  const d = diff(oldManifest, newManifest)
-  const patch = Manifest.create()
+  const oldPaths = new Map<string, Entry>()
+  for (const [path, entry] of oldManifest) oldPaths.set(path, entry)
+  const newPaths = new Map<string, Entry>()
+  for (const [path, entry] of newManifest) newPaths.set(path, entry)
 
+  const added: Entry[] = []
+  const modified: Entry[] = []
+  const removed: Entry[] = []
+  for (const [path, oldEntry] of oldPaths) {
+    const newEntry = newPaths.get(path)
+    if (!newEntry) {
+      removed.push(oldEntry)
+    } else if (!entriesIdentical(oldEntry, newEntry)) {
+      // Any field differs, a time or a mode alone included: the new line.
+      modified.push(newEntry)
+    }
+  }
+  for (const [path, newEntry] of newPaths) {
+    if (!oldPaths.has(path)) added.push(newEntry)
+  }
+
+  const patch = Manifest.create()
   // Additions and modifications — use new entries
-  for (const { entry } of d.added) patch.addEntry({ ...entry })
-  for (const { newEntry } of d.modified) patch.addEntry({ ...newEntry })
+  for (const entry of added) patch.addEntry({ ...entry })
+  for (const entry of modified) patch.addEntry({ ...entry })
   // Removals — restate original entry exactly
-  for (const { entry } of d.removed) patch.addEntry({ ...entry })
+  for (const entry of removed) patch.addEntry({ ...entry })
 
   const oldID = await oldManifest.computeC4ID()
   return { oldID: oldID.toString(), patch }
