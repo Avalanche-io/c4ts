@@ -17,6 +17,13 @@ export interface ScanOptions {
   skipHidden?: boolean
   /** Progress callback invoked for each file processed. */
   progress?: (path: string, filesProcessed: number) => void
+  /**
+   * Called for each file whose content could not be read. The file is still
+   * recorded, with a null C4 ID (a read error never becomes an ID, and never
+   * aborts the scan); a caller that needs a complete description treats any
+   * call as a partial scan, as the Go CLI does (exit 2).
+   */
+  onReadError?: (path: string, err: unknown) => void
 }
 
 /**
@@ -47,6 +54,7 @@ export async function scan(
     followSymlinks,
     store: options?.store,
     progress: options?.progress,
+    onReadError: options?.onReadError,
     counter: { value: 0 },
   })
 
@@ -63,6 +71,7 @@ interface WalkState {
   followSymlinks: boolean
   store?: Store
   progress?: (path: string, filesProcessed: number) => void
+  onReadError?: (path: string, err: unknown) => void
   counter: { value: number }
 }
 
@@ -110,12 +119,20 @@ async function walkDir(
 
     let c4id = null
     if (state.computeIds) {
-      const stream = await fs.readFile(fullPath)
-      const bytes = await streamToBytes(stream)
-      c4id = await identifyContent(bytes)
-
-      if (state.store) {
-        await state.store.put(bytes)
+      // An unreadable file (EACCES, EIO) is recorded with a null C4 ID and
+      // reported, never an abort: through 1.0.25 one such file threw out of
+      // the whole scan.
+      let bytes: Uint8Array | null = null
+      try {
+        bytes = await streamToBytes(await fs.readFile(fullPath))
+      } catch (err) {
+        state.onReadError?.(file.relPath, err)
+      }
+      if (bytes !== null) {
+        c4id = await identifyContent(bytes)
+        if (state.store) {
+          await state.store.put(bytes)
+        }
       }
     }
 
