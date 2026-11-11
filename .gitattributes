@@ -6,3 +6,4 @@ packages/core/tests/fixtures/backslash-name-vector/* -text
 packages/core/tests/fixtures/damaged-line-vector/* -text
 packages/core/tests/fixtures/apply-from-vector/** -text
 packages/core/tests/fixtures/name-rule-vector/* -text
+packages/core/tests/fixtures/name-escape-vector/* -text
