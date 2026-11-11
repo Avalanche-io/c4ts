@@ -133,7 +133,12 @@ export function unsafeName(encoded: string): string {
     return encoded
   }
 
-  const decoder = new TextDecoder()
+  // Fatal: a name whose bytes are not UTF-8 (Tier 3 can carry any byte)
+  // cannot be held exactly in a JS string. Decoding it leniently replaced
+  // the bytes with U+FFFD, a different name with a different C4 ID, with no
+  // error; it is refused instead, and the decoder names the line. Whether
+  // c4ts should carry such names as bytes is with Joshua (SafeName vector).
+  const decoder = new TextDecoder('utf-8', { fatal: true })
   const outputBytes: number[] = []
   const encoder = new TextEncoder()
 
@@ -203,7 +208,13 @@ export function unsafeName(encoded: string): string {
     i += charLen
   }
 
-  return decoder.decode(new Uint8Array(outputBytes))
+  try {
+    return decoder.decode(new Uint8Array(outputBytes))
+  } catch {
+    throw new Error(
+      `name ${JSON.stringify(encoded)} decodes to bytes that are not UTF-8, which a JS string cannot hold exactly`,
+    )
+  }
 }
 
 // decodeUtf8 decodes a single UTF-8 codepoint from a byte array at offset.
