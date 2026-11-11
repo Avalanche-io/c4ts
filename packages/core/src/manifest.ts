@@ -467,18 +467,19 @@ function propagateMetadata(entries: Entry[]): void {
 
     const children = getDirectoryChildren(entries, entry)
     if (needsSize) {
-      // A childless directory with a C4 ID other than the empty listing's
-      // is collapsed: its listing lives under that ID, not here, so its size
-      // cannot be derived and stays null. Through 1.0.26 any childless
-      // directory gave 0, an invented value computeC4ID then hashed
-      // (childless-dir vector). On this line a childless directory with no
-      // ID still gives 0, as the Go reference's 1.0.x line does: the scanner
-      // sizes a directory before it has an ID. Main keeps that size null, a
-      // known 1.0.x difference the vector's unread/ pins.
+      // A directory with no listed children is empty (size 0) only when
+      // its ID says so: an empty listing hashes to the empty-content ID.
+      // A childless directory with no ID is one nobody read (a hand-written
+      // line, or another tool's output; this line's scanner throws at a
+      // directory it cannot read): its size stays null, because 0 beside
+      // no ID would assert an emptiness nobody saw. A childless directory
+      // with any other ID is collapsed: its listing lives under that ID,
+      // not here, so its size cannot be derived and stays null. Through
+      // 1.0.26 every childless directory gave 0, an invented value
+      // computeC4ID then hashed (childless-dir vector). The scanner states
+      // 0 for a directory it listed as empty.
       if (children.length === 0) {
-        const collapsed =
-          entry.c4id != null && !entry.c4id.isNil() && entry.c4id.toString() !== EMPTY_LISTING_ID
-        entry.size = collapsed ? NULL_SIZE : 0
+        entry.size = entry.c4id?.toString() === EMPTY_LISTING_ID ? 0 : NULL_SIZE
       } else {
         entry.size = calculateDirectorySize(children)
       }

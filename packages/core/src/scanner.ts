@@ -171,12 +171,24 @@ async function walkDir(
  * An empty directory has size 0 and the ID of the empty string.
  */
 async function resolveDir(dir: Entry, children: Entry[], computeIds: boolean): Promise<void> {
+  // The ID first: the scanner read this directory, so an empty one carries
+  // the empty-listing ID, which is what tells propagation it is empty (size
+  // 0) rather than unread (a childless directory with no ID keeps a null
+  // size). The children are final, so their listing is too.
+  if (computeIds) {
+    const listing = Manifest.create()
+    listing.entries = children
+    dir.c4id = await listing.computeC4ID()
+  } else if (children.length === 0) {
+    // Without IDs a directory listed with no children is still empty by
+    // observation: its size is a stated 0 and its ID stays null, ordinary
+    // partial knowledge. A stated size is kept by propagation, so the
+    // output is byte-identical to 1.0.26's. (1.1 states the empty
+    // listing's ID here; the lines differ only in that column.)
+    dir.size = 0
+  }
+
   const scope = Manifest.create()
   scope.entries = [dir, ...children]
   scope.canonicalize()
-
-  if (!computeIds) return
-  const listing = Manifest.create()
-  listing.entries = children
-  dir.c4id = await listing.computeC4ID()
 }
