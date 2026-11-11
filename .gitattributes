@@ -4,3 +4,4 @@ packages/core/tests/fixtures/legacy/* -text
 packages/core/tests/fixtures/link-target-vector/* -text
 packages/core/tests/fixtures/backslash-name-vector/* -text
 packages/core/tests/fixtures/damaged-line-vector/* -text
+packages/core/tests/fixtures/apply-from-vector/** -text
