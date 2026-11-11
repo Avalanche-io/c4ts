@@ -94,6 +94,16 @@ function parseNameOrTarget(line: string, pos: number): [string, number, boolean]
       hasUnescapedBrackets = true
     }
 
+    // A double quote is written \" in a name, and a control byte is encoded
+    // by SafeName, so a raw one never comes from a conforming writer: it is
+    // damage, refused rather than read into the name (name-escape vector).
+    if (ch === '"') {
+      throw new InvalidEntryError(`name holds a raw '"' (written \\" in a name)`)
+    }
+    if (ch.charCodeAt(0) < 0x20) {
+      throw new InvalidEntryError(`name holds a raw control byte 0x${ch.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()} (SafeName encodes it)`)
+    }
+
     // A "/" ends a directory's name, and only where the field ends with it.
     // Anything after it but a space is part of the name, which then holds
     // a "/" and is refused with its line by parseEntryFromLine. Before, the
@@ -132,6 +142,13 @@ function parseNameOrTarget(line: string, pos: number): [string, number, boolean]
       if (rest[0] === '-' && (rest.length === 1 || rest[1] === ' ')) {
         return [buf, pos, hasUnescapedBrackets]
       }
+      // A space that is not a field boundary would be part of the name, but
+      // a name's space is written "\ ": an unescaped one is damage, often a
+      // damaged C4 ID field that would otherwise join the name.
+      const end = rest.indexOf(' ')
+      throw new InvalidEntryError(
+        `name ${JSON.stringify(buf + ' ' + (end < 0 ? rest : rest.substring(0, end)))} holds an unescaped space (written "\\ " in a name), or its C4 ID field is damaged`,
+      )
     }
     buf += ch
     pos++
@@ -343,7 +360,28 @@ function parseEntryFields(
 }
 
 /** Parse a single entry from a line of c4m text. */
+/**
+ * Parse one entry line. A line that does not parse is an error naming the
+ * line (damaged-line and name-escape vectors): the field parsers do not know
+ * the line, so their errors are given it here. Through 1.0.26 most of them
+ * named no line.
+ */
 function parseEntryFromLine(
+  line: string,
+  indentWidth: { value: number },
+  lineNum: number,
+): Entry {
+  try {
+    return parseEntryFromLineFields(line, indentWidth, lineNum)
+  } catch (e) {
+    if (e instanceof Error && !/\bline \d+:/.test(e.message)) {
+      throw new InvalidEntryError(`line ${lineNum}: ${e.message.replace(/^c4m: invalid entry: /, '')}`)
+    }
+    throw e
+  }
+}
+
+function parseEntryFromLineFields(
   line: string,
   indentWidth: { value: number },
   lineNum: number,
