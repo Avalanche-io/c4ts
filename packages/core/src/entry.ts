@@ -165,6 +165,22 @@ export function parseMode(s: string): [string, number] {
   }
 
   const modeType = s[0]
+  if (!"-dlpsbc".includes(modeType)) {
+    throw new Error(`unknown file type: ${modeType}`)
+  }
+  // Each permission position holds its own letter or "-"; the execute
+  // positions may also carry s/S (owner, group) or t/T (other), exactly what
+  // every encoder writes. Any other character is refused: it used to read
+  // as a clear bit (damaged-line vector).
+  for (let i = 1; i < 10; i++) {
+    const c = s[i]
+    let allowed = "rwx"[(i - 1) % 3] + "-"
+    if (i === 3 || i === 6) allowed += "sS"
+    else if (i === 9) allowed += "tT"
+    if (!allowed.includes(c)) {
+      throw new Error(`invalid permission character "${c}" at position ${i + 1}`)
+    }
+  }
   let perm = 0
 
   // Permission bits

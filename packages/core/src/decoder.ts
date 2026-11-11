@@ -73,14 +73,20 @@ function parseNameOrTarget(line: string, pos: number): [string, number, boolean]
   while (pos < n) {
     const ch = line[pos]
 
-    // c4m field-boundary escapes
+    // A backslash always starts a two-byte escape: a c4m field-boundary
+    // escape becomes its literal, any other (a SafeName escape such as
+    // \\\\) passes through whole, so its second byte never starts an escape
+    // of its own. A name ending in a backslash read back with a space added
+    // before this (backslash-name vector).
     if (ch === '\\' && pos + 1 < n) {
       const next = line[pos + 1]
       if (next === ' ' || next === '"' || next === '[' || next === ']') {
         buf += next
-        pos += 2
-        continue
+      } else {
+        buf += ch + next
       }
+      pos += 2
+      continue
     }
 
     if (ch === '[' || ch === ']') {
@@ -138,22 +144,21 @@ function parseTarget(line: string, pos: number): [string, number] {
 
   while (pos < n) {
     const ch = line[pos]
+    // A backslash always starts a two-byte escape (as in names).
     if (ch === '\\' && pos + 1 < n) {
       const next = line[pos + 1]
       if (next === ' ' || next === '"') {
         buf += next
-        pos += 2
-        continue
+      } else {
+        buf += ch + next
       }
+      pos += 2
+      continue
     }
-    if (ch === ' ') {
-      const rest = line.substring(pos)
-      if (rest.length > 2 && rest[1] === 'c' && rest[2] === '4') {
-        return [buf, pos]
-      }
-      if (rest.length >= 2 && rest[1] === '-' && (rest.length === 2 || rest[2] === ' ')) {
-        return [buf, pos]
-      }
+    // The pretty form pads before the C4 ID field; the whole run of
+    // spaces is skipped before asking whether that field starts.
+    if (ch === ' ' && startsIDField(line, pos)) {
+      return [buf, pos]
     }
     buf += ch
     pos++
@@ -167,19 +172,44 @@ function parseFlowTarget(line: string, pos: number): [string, number] {
   const n = line.length
   const start = pos
   while (pos < n) {
-    const ch = line[pos]
-    if (ch === ' ') {
-      const rest = line.substring(pos)
-      if (rest.length > 2 && rest[1] === 'c' && rest[2] === '4') {
-        return [line.substring(start, pos), pos]
-      }
-      if (rest.length >= 2 && rest[1] === '-' && (rest.length === 2 || rest[2] === ' ')) {
-        return [line.substring(start, pos), pos]
-      }
+    if (line[pos] === ' ' && startsIDField(line, pos)) {
+      return [line.substring(start, pos), pos]
     }
     pos++
   }
   return [line.substring(start, pos), pos]
+}
+
+/**
+ * Whether the run of spaces at pos is followed by the C4 ID field: a C4 ID,
+ * or the null "-" as the last field.
+ */
+function startsIDField(line: string, pos: number): boolean {
+  while (pos < line.length && line[pos] === ' ') pos++
+  const rest = line.substring(pos)
+  return rest.startsWith('c4') || rest === '-' || rest.startsWith('- ')
+}
+
+/**
+ * Whether s, the rest of a line after a link operator, is exactly one field
+ * that is a C4 ID or the null "-". A field ends at an unescaped space.
+ */
+function isLoneIDField(s: string): boolean {
+  if (s === '-') return true
+  if (!s.startsWith('c4')) return false
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '\\') {
+      i++
+      continue
+    }
+    if (s[i] === ' ') return false
+  }
+  try {
+    parseC4ID(s)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Parse the fields after timestamp: size, name, link ops, c4id. */
@@ -204,6 +234,7 @@ function parseEntryFields(
   while (pos < n && line[pos] === ' ') pos++
 
   // 1. Parse size
+  const tokStart = pos
   let size: number
   if (line[pos] === '-') {
     size = -1
@@ -214,6 +245,13 @@ function parseEntryFields(
     const sizeStr = line.substring(sizeStart, pos).replace(/,/g, '')
     size = parseInt(sizeStr, 10)
     if (isNaN(size)) throw new InvalidEntryError(`invalid size "${line.substring(sizeStart, pos)}"`)
+  }
+  // The size token ends at a space: "6x a.txt" read as size 6 and the name
+  // "x a.txt", a different entry with no error (damaged-line vector).
+  if (pos < n && line[pos] !== ' ') {
+    let end = pos
+    while (end < n && line[end] !== ' ') end++
+    throw new InvalidEntryError(`invalid size "${line.substring(tokStart, end)}"`)
   }
 
   // Skip whitespace
@@ -261,7 +299,10 @@ function parseEntryFields(
         while (pos < n && line[pos] === ' ') pos++
       } else {
         const remaining = line.substring(pos).trim()
-        if (remaining === '-' || remaining.startsWith('c4')) {
+        // One field that is "-" or a C4 ID is the hard link's ID field; two
+        // fields are a target and the ID field, even when the target starts
+        // with "c4" (link-target vector).
+        if (isLoneIDField(remaining)) {
           hardLink = -1
         } else if (pos < n) {
           ;[target, pos] = parseTarget(line, pos)
