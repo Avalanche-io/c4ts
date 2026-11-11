@@ -482,6 +482,11 @@ export class Manifest {
 
 // ---- Metadata Propagation ----
 
+// The C4 ID of an empty listing: the ID of zero bytes. A directory with no
+// listed children and this ID is known to be empty.
+const EMPTY_LISTING_ID =
+  'c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT'
+
 function propagateMetadata(entries: Entry[]): void {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]
@@ -501,8 +506,15 @@ function propagateMetadata(entries: Entry[]): void {
       // directory in a scan, or a hand-written line): its size stays null,
       // because 0 beside no ID would assert an emptiness nobody saw
       // (SPECIFICATION.md "Empty and Unread Directories", 2026-11-09).
-      const unread = children.length === 0 && (!entry.c4id || entry.c4id.isNil())
-      entry.size = unread ? NULL_SIZE : calculateDirectorySize(children)
+      // A childless directory with any other ID is collapsed: its listing
+      // lives under that ID, not here, so its size cannot be derived and
+      // stays null. Through 2026-11-11 any non-nil ID gave 0, an invented
+      // value computeC4ID then hashed (childless-dir vector).
+      if (children.length === 0) {
+        entry.size = entry.c4id?.toString() === EMPTY_LISTING_ID ? 0 : NULL_SIZE
+      } else {
+        entry.size = calculateDirectorySize(children)
+      }
     }
     if (needsTimestamp) {
       entry.timestamp = getMostRecentModtime(children)
