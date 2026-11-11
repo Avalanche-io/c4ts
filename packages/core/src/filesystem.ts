@@ -52,6 +52,21 @@ export interface FileSystem {
 
   /** Set file metadata (permissions, timestamps). Optional. */
   setMeta?(path: string, meta: { mode?: number; mtime?: Date }): Promise<void>
+
+  /**
+   * Get metadata for a path without following a final symbolic link: a
+   * link's own mode, mtime and size (its target's length). Optional; a
+   * scanner records symbolic links only on a filesystem that has it and
+   * readLink.
+   */
+  lstat?(path: string): Promise<FileStat>
+
+  /**
+   * Read a symbolic link's target, with "/" as its separator (a platform
+   * whose separator is another character converts it, as Go's
+   * filepath.ToSlash does; any other byte is kept). Optional.
+   */
+  readLink?(path: string): Promise<string>
 }
 
 /** Error thrown when a path is not found. */

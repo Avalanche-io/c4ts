@@ -1,6 +1,7 @@
 import type { FileSystem } from './filesystem.js'
 import type { Store } from './store.js'
 import { Manifest } from './manifest.js'
+import type { C4ID } from './id.js'
 import { type Entry, createEntry, NULL_SIZE } from './entry.js'
 import { identifyContent } from './identify-content.js'
 import { streamToBytes, joinPath } from './filesystem.js'
@@ -48,6 +49,7 @@ export async function scan(
     store: options?.store,
     progress: options?.progress,
     counter: { value: 0 },
+    linkChain: new Set([cleanPath(rootPath)]),
   })
 
   // Sort entries (files before dirs, natural sort).
@@ -64,6 +66,9 @@ interface WalkState {
   store?: Store
   progress?: (path: string, filesProcessed: number) => void
   counter: { value: number }
+  // Directories being resolved: the scan root and every directory reached
+  // through a link above the current one (the cycle guard).
+  linkChain: Set<string>
 }
 
 /**
@@ -83,12 +88,22 @@ async function walkDir(
   // Collect dir entries so we can process files first, then recurse.
   const files: Array<{ name: string; relPath: string }> = []
   const dirs: Array<{ name: string; relPath: string }> = []
+  const links: Array<{ name: string; relPath: string }> = []
 
   for await (const dirEntry of fs.readDir(absDir)) {
     if (state.skipHidden && dirEntry.name.startsWith('.')) continue
-    if (dirEntry.isSymlink && !state.followSymlinks) continue
 
     const relPath = relDir ? relDir + dirEntry.name : dirEntry.name
+
+    if (dirEntry.isSymlink && !state.followSymlinks) {
+      // A link is recorded as itself, as the Go scanner records it: its own
+      // mode, mtime and size, and its target. Through 1.0.26 c4ts dropped
+      // every link from a scan, so a tree holding one had a C4 ID no other
+      // implementation computes. A filesystem that cannot read links (no
+      // lstat or readLink) has none to record.
+      if (fs.lstat && fs.readLink) links.push({ name: dirEntry.name, relPath })
+      continue
+    }
 
     if (dirEntry.isDirectory) {
       dirs.push({ name: dirEntry.name, relPath })
@@ -135,6 +150,36 @@ async function walkDir(
     state.progress?.(file.relPath, state.counter.value)
   }
 
+  // Record symbolic links.
+  for (const link of links) {
+    const fullPath = joinPath(rootPath, link.relPath)
+    const stat = await fs.lstat!(fullPath)
+    let target: string | null = null
+    try {
+      target = await fs.readLink!(fullPath)
+    } catch {
+      // A link whose target cannot be read keeps a null ID and an empty
+      // target; this line has no read-error report (main's onReadError).
+    }
+    const c4id = state.computeIds && target !== null
+      ? await linkTargetID(fs, fullPath, target, state)
+      : null
+    const entry = createEntry({
+      mode: stat.mode & 0o7777,
+      modeType: 'l',
+      timestamp: stat.mtime,
+      size: stat.size,
+      name: link.name,
+      target: target ?? '',
+      c4id,
+      depth,
+    })
+    manifest.addEntry(entry)
+    children.push(entry)
+    state.counter.value++
+    state.progress?.(link.relPath, state.counter.value)
+  }
+
   // Recurse into subdirectories.
   for (const dir of dirs) {
     const fullPath = joinPath(rootPath, dir.relPath)
@@ -162,6 +207,61 @@ async function walkDir(
   }
 
   return children
+}
+
+/**
+ * Normalise a "/"-separated path: drop "." segments and empty ones, and
+ * resolve ".." against the segment before it. A leading "/" is kept.
+ */
+function cleanPath(p: string): string {
+  const abs = p.startsWith('/')
+  const out: string[] = []
+  for (const seg of p.split('/')) {
+    if (seg === '' || seg === '.') continue
+    if (seg === '..' && out.length > 0 && out[out.length - 1] !== '..') out.pop()
+    else if (seg === '..' && abs) continue
+    else out.push(seg)
+  }
+  return (abs ? '/' : '') + out.join('/')
+}
+
+/**
+ * The C4 ID of a symbolic link, by the Go scanner's rules: a link to a
+ * regular file carries the file's ID; a link to a directory carries the ID
+ * of that directory scanned; a link that is dangling, or names another
+ * link, has none. A link naming a directory already being resolved (the
+ * scan's root, or a directory reached through a link above it, as
+ * `up -> ..` and `here -> .` do) has none too: that scan would meet the
+ * link again, and no fixed point exists.
+ */
+async function linkTargetID(fs: FileSystem, linkPath: string, target: string, state: WalkState): Promise<C4ID | null> {
+  const isAbs = target.startsWith('/') || /^[A-Za-z]:\//.test(target)
+  const slash = linkPath.lastIndexOf('/')
+  const targetPath = cleanPath(isAbs ? target : (slash >= 0 ? linkPath.slice(0, slash + 1) : '') + target)
+  let info
+  try {
+    info = await fs.lstat!(targetPath)
+  } catch {
+    return null
+  }
+  if (info.isSymlink) return null
+  if (info.isDirectory) {
+    if (state.linkChain.has(targetPath)) return null
+    const sub = Manifest.create()
+    await walkDir(fs, targetPath, '', 0, sub, {
+      ...state,
+      progress: undefined,
+      counter: { value: 0 },
+      linkChain: new Set([...state.linkChain, targetPath]),
+    })
+    sub.sortEntries()
+    return sub.computeC4ID()
+  }
+  try {
+    return await identifyContent(await streamToBytes(await fs.readFile(targetPath)))
+  } catch {
+    return null
+  }
 }
 
 /**
