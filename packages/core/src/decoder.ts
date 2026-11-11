@@ -6,6 +6,7 @@ import {
   parseMode,
   parseTimestamp,
   isDir,
+  isPathName,
 } from './entry.js'
 import { unsafeName } from './safename.js'
 import {
@@ -93,8 +94,12 @@ function parseNameOrTarget(line: string, pos: number): [string, number, boolean]
       hasUnescapedBrackets = true
     }
 
-    // Directory name ends at / (inclusive)
-    if (ch === '/') {
+    // A "/" ends a directory's name, and only where the field ends with it.
+    // Anything after it but a space is part of the name, which then holds
+    // a "/" and is refused with its line by parseEntryFromLine. Before, the
+    // name was cut at its first "/" and the rest of the line, C4 ID
+    // included, dropped (name-rule vector).
+    if (ch === '/' && (pos + 1 >= n || line[pos + 1] === ' ')) {
       buf += '/'
       pos++
       return [buf, pos, hasUnescapedBrackets]
@@ -424,6 +429,14 @@ function parseEntryFromLine(
     flowDirection: fields.flowDir,
     flowTarget: fields.flowTarget,
   })
+
+  // A name is a bare entry name, checked once decoded, so an escaped "/"
+  // is refused as surely as a raw one (name-rule vector).
+  if (isPathName(entry.name)) {
+    throw new InvalidEntryError(
+      `line ${lineNum}: name ${JSON.stringify(entry.name)} is a path, not an entry name (only a directory's trailing / is allowed)`,
+    )
+  }
 
   // Check for sequence notation
   if (hasUnescapedSequenceNotation(fields.rawName)) {

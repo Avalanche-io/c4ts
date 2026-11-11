@@ -7,6 +7,7 @@ import {
   canonicalEntry,
   FlowDirection,
   NULL_SIZE,
+  isPathName,
 } from './entry.js'
 import { naturalLess } from './naturalsort.js'
 import {
@@ -18,16 +19,6 @@ import {
 import { decode, type DecodeResult } from './decoder.js'
 import { encode } from './encoder.js'
 import { applyPatch } from './diff.js'
-
-/** Check if a name contains path semantics (invalid for c4m entries). */
-function isPathName(name: string): boolean {
-  if (name === '') return true
-  const base = name.endsWith('/') ? name.slice(0, -1) : name
-  if (base === '') return true
-  if (base === '.' || base === '..') return true
-  if (base.includes('/') || base.includes('\\') || base.includes('\0')) return true
-  return false
-}
 
 /** Tree index for O(1) path lookups. */
 interface TreeIndex {
@@ -153,8 +144,15 @@ export class Manifest {
     this.sortSiblingsHierarchically()
   }
 
-  /** Returns the canonical text form (top-level entries only, sorted). */
+  /**
+   * Returns the canonical text form (top-level entries only, sorted).
+   *
+   * A manifest holding a name the format forbids, at any depth, has no
+   * canonical text: no conforming c4m spells it, and every decoder refuses
+   * such a line. It gives '', never text a reader would refuse, as in Go.
+   */
   canonical(): string {
+    if (this.entries.some(e => isPathName(e.name))) return ''
     // Find minimum depth
     let minDepth = -1
     for (const entry of this.entries) {
@@ -183,8 +181,14 @@ export class Manifest {
     return topLevel.map(e => canonicalEntry(e) + '\n').join('')
   }
 
-  /** Compute the C4 ID of this manifest. */
+  /**
+   * Compute the C4 ID of this manifest. A manifest holding a name the
+   * format forbids, at any depth, has no C4 ID (no conforming c4m text
+   * exists to hash) and gets the nil ID, the format's "unavailable", as in
+   * Go.
+   */
   async computeC4ID(): Promise<C4ID> {
+    if (this.entries.some(e => isPathName(e.name))) return C4ID.nil()
     const copy = this.copy()
     copy.canonicalize()
     const text = copy.canonical()
