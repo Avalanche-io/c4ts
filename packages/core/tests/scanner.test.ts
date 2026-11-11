@@ -116,20 +116,21 @@ describe('scan resolves directories bottom-up', () => {
     expect((await copy.computeC4ID()).toString()).not.toBe(id.toString())
   })
 
-  it('computeIds: false resolves sizes but leaves IDs null, as Go metadata mode does', async () => {
-    // Measured against the Go CLI (`c4 id -m metadata`, 2026-11-09): a
-    // directory with listed children gets its size; a childless directory
-    // with no ID keeps a null size, since 0 beside no ID would assert an
-    // emptiness the description cannot show (SPECIFICATION.md "Empty and
-    // Unread Directories"). Only full mode, which carries the
-    // empty-listing ID, can say a directory is empty.
+  it('computeIds: false resolves sizes and leaves IDs null, but an observed empty directory is empty', async () => {
+    // As the Go reference's metadata mode (`c4 id -m m`, Avalanche-io/c4#130):
+    // a directory the walk listed with no children is empty by observation,
+    // so it carries the empty listing's ID, a known constant, and size 0.
+    // Every other entry has a null ID and a known size. Before, the empty
+    // directory had no ID, read as unread, and kept a null size.
     const m = await scan(await seed(), 'root', { computeIds: false })
+    const emptyId = (await identifyBytes(new Uint8Array(0))).toString()
     for (const [path, e] of m) {
-      expect(e.c4id, path).toBeNull()
-      if (path === 'empty/') continue
       expect(e.size, path).toBeGreaterThanOrEqual(0)
+      if (path === 'empty/') continue
+      expect(e.c4id, path).toBeNull()
     }
-    expect(m.get('empty/')!.size).toBe(-1)
+    expect(m.get('empty/')!.size).toBe(0)
+    expect(m.get('empty/')!.c4id?.toString()).toBe(emptyId)
     expect(isDir(m.get('docs/')!)).toBe(true)
   })
 })

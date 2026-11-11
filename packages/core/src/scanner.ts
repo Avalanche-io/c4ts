@@ -3,6 +3,7 @@ import type { Store } from './store.js'
 import { Manifest } from './manifest.js'
 import { type Entry, createEntry, knownMode, MODE_PERM_MASK, NULL_SIZE } from './entry.js'
 import { identifyContent } from './identify-content.js'
+import { identifyBytes } from './id.js'
 import { streamToBytes, joinPath } from './filesystem.js'
 
 /** Options for the scan function. */
@@ -197,6 +198,15 @@ async function resolveDir(dir: Entry, children: Entry[], computeIds: boolean): P
     const listing = Manifest.create()
     listing.entries = children
     dir.c4id = await listing.computeC4ID()
+  } else if (children.length === 0) {
+    // Without IDs a directory listed with no children is still empty by
+    // observation: the walk read it and saw nothing. It gets the empty
+    // listing's ID, a known constant rather than a hash of anything read,
+    // so propagation gives it size 0, as the Go reference's metadata mode
+    // does. Before, it had no ID, read as unread, and its null size spread
+    // to every directory above it. A directory the walk cannot read throws
+    // before reaching here.
+    dir.c4id = await identifyBytes(new Uint8Array(0))
   }
 
   const scope = Manifest.create()
