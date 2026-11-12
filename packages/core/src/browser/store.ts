@@ -3,7 +3,6 @@ import { identifyBytes } from '../id.js'
 import type { Store } from '../store.js'
 import { ContentNotFoundError } from '../store.js'
 import { streamToBytes, bytesToStream } from '../filesystem.js'
-import { tryCanonicalizeC4m } from '../identify-content.js'
 
 const DB_VERSION = 1
 const OBJECTS_STORE = 'objects'
@@ -79,13 +78,11 @@ export class IndexedDBStore implements Store {
   }
 
   async put(data: ReadableStream<Uint8Array> | Uint8Array): Promise<C4ID> {
-    let bytes = data instanceof Uint8Array ? data : await streamToBytes(data)
+    const bytes = data instanceof Uint8Array ? data : await streamToBytes(data)
 
-    // If content parses as c4m, store the canonical form
-    const canonical = await tryCanonicalizeC4m(bytes)
-    if (canonical) {
-      bytes = canonical
-    }
+    // The bytes given are stored exactly, under their own C4 ID, so
+    // get(put(x)) is x. c4m text is no exception: through 1.0.26 a
+    // c4m-looking object was stored as its one-level canonical listing.
 
     const id = await identifyBytes(bytes)
     const key = id.toString()

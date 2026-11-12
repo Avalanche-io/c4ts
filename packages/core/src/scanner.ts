@@ -3,7 +3,6 @@ import type { Store } from './store.js'
 import { Manifest } from './manifest.js'
 import type { C4ID } from './id.js'
 import { type Entry, createEntry, knownMode, MODE_PERM_MASK, NULL_SIZE } from './entry.js'
-import { identifyContent } from './identify-content.js'
 import { identifyBytes } from './id.js'
 import { streamToBytes, joinPath } from './filesystem.js'
 
@@ -145,7 +144,7 @@ async function walkDir(
         state.onReadError?.(file.relPath, err)
       }
       if (bytes !== null) {
-        c4id = await identifyContent(bytes)
+        c4id = await identifyBytes(bytes)
         if (state.store) {
           await state.store.put(bytes)
         }
@@ -276,7 +275,7 @@ async function linkTargetID(fs: FileSystem, linkPath: string, target: string, st
     return sub.computeC4ID()
   }
   try {
-    return await identifyContent(await streamToBytes(await fs.readFile(targetPath)))
+    return await identifyBytes(await streamToBytes(await fs.readFile(targetPath)))
   } catch {
     return null
   }

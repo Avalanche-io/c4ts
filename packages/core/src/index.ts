@@ -3,7 +3,6 @@
 
 // Core ID
 export { C4ID, identify, identifyBytes, parse } from './id.js'
-export { identifyContent, tryCanonicalizeC4m } from './identify-content.js'
 export { treeId } from './tree.js'
 
 // c4m Entry

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { NodeFS } from '../../node/src/node-fs.js'
 import { scan } from '../src/scanner.js'
-import { identifyContent } from '../src/identify-content.js'
+import { identifyBytes } from '../src/id.js'
 
 // A symbolic link is recorded as itself, as the Go scanner records it: an
 // `l` entry with its own mode, mtime and size, its target, and a C4 ID by
@@ -31,7 +31,7 @@ describe('scan records symbolic links', () => {
       const subScan = await scan(new NodeFS(), join(dir, 'sub'))
 
       const want: Record<string, [string, string | null]> = {
-        'to-file': ['f.txt', (await identifyContent(new TextEncoder().encode('hi'))).toString()],
+        'to-file': ['f.txt', (await identifyBytes(new TextEncoder().encode('hi'))).toString()],
         'to-dir': ['sub', (await subScan.computeC4ID()).toString()],
         'to-link': ['to-file', null], // a link naming a link has no ID
         'dangling': ['missing', null],
