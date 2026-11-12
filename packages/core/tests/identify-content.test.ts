@@ -11,120 +11,59 @@ import knownIDs from './vectors/known_ids.json'
 const vector = knownIDs.manifest_vectors[0]
 const enc = new TextEncoder()
 
-describe('identifyContent', () => {
-  it('canonical c4m produces the same ID as identifyContent', async () => {
-    const data = enc.encode(vector.canonical)
-    const id = await identifyContent(data)
-    expect(id.toString()).toBe(vector.manifest_c4id)
-  })
+// Since 1.0.27 a file's C4 ID is its bytes, c4m text included. Through
+// 1.0.26 identifyContent and MemoryStore.put re-rendered c4m text to its
+// one-level canonical listing first. identifyContent and tryCanonicalizeC4m
+// are kept on this line, deprecated, for code built against 1.0.26.
 
-  it('pretty-printed c4m produces the same C4 ID as canonical form', async () => {
+describe('identifyContent (deprecated): the bytes\' ID', () => {
+  it('pretty and canonical c4m are two files with two IDs, and one description ID', async () => {
     const m = await Manifest.parse(vector.canonical)
-    const pretty = m.encode({ pretty: true })
-    const canonical = m.encode({ pretty: false })
+    const pretty = enc.encode(m.encode({ pretty: true }))
+    const canonical = enc.encode(m.encode({ pretty: false }))
+    expect(new TextDecoder().decode(pretty)).not.toBe(new TextDecoder().decode(canonical))
 
-    // The text forms differ
-    expect(pretty).not.toBe(canonical)
+    expect((await identifyContent(pretty)).toString()).toBe((await identifyBytes(pretty)).toString())
+    expect((await identifyContent(canonical)).toString()).toBe((await identifyBytes(canonical)).toString())
+    expect((await identifyContent(pretty)).toString()).not.toBe((await identifyContent(canonical)).toString())
 
-    // But identifyContent gives the same ID for both
-    const prettyId = await identifyContent(enc.encode(pretty))
-    const canonicalId = await identifyContent(enc.encode(canonical))
-    expect(prettyId.toString()).toBe(canonicalId.toString())
-    expect(prettyId.toString()).toBe(vector.manifest_c4id)
+    // The description both hold resolves to one ID.
+    const a = await Manifest.parse(new TextDecoder().decode(pretty))
+    const b = await Manifest.parse(new TextDecoder().decode(canonical))
+    expect((await a.computeC4ID()).toString()).toBe(vector.manifest_c4id)
+    expect((await b.computeC4ID()).toString()).toBe(vector.manifest_c4id)
   })
 
-  it('raw identifyBytes gives different IDs for pretty vs canonical', async () => {
-    const m = await Manifest.parse(vector.canonical)
-    const pretty = m.encode({ pretty: true })
-    const canonical = m.encode({ pretty: false })
-
-    const prettyId = await identifyBytes(enc.encode(pretty))
-    const canonicalId = await identifyBytes(enc.encode(canonical))
-
-    // Raw hashing sees different bytes
-    expect(prettyId.toString()).not.toBe(canonicalId.toString())
-  })
-
-  it('non-c4m content is hashed as raw bytes', async () => {
-    const data = enc.encode('just some plain text')
-    const contentId = await identifyContent(data)
-    const rawId = await identifyBytes(data)
-    expect(contentId.toString()).toBe(rawId.toString())
-  })
-
-  it('empty input is hashed as raw bytes', async () => {
-    const data = new Uint8Array(0)
-    const contentId = await identifyContent(data)
-    const rawId = await identifyBytes(data)
-    expect(contentId.toString()).toBe(rawId.toString())
-  })
-
-  it('binary data is hashed as raw bytes', async () => {
-    const data = new Uint8Array([0x00, 0x01, 0x02, 0xff, 0xfe])
-    const contentId = await identifyContent(data)
-    const rawId = await identifyBytes(data)
-    expect(contentId.toString()).toBe(rawId.toString())
+  it('non-c4m, empty and binary input are the bytes\' ID', async () => {
+    for (const data of [enc.encode('just some plain text'), new Uint8Array(0), new Uint8Array([0, 1, 2, 0xff])]) {
+      expect((await identifyContent(data)).toString()).toBe((await identifyBytes(data)).toString())
+    }
   })
 })
 
-describe('tryCanonicalizeC4m', () => {
+describe('tryCanonicalizeC4m (deprecated, unchanged)', () => {
   it('returns canonical bytes for valid c4m', async () => {
-    const data = enc.encode(vector.canonical)
-    const canonical = await tryCanonicalizeC4m(data)
+    const canonical = await tryCanonicalizeC4m(enc.encode(vector.canonical))
     expect(canonical).not.toBeNull()
     expect(canonical!.length).toBeGreaterThan(0)
   })
 
-  it('returns null for plain text', async () => {
-    const data = enc.encode('hello world')
-    const result = await tryCanonicalizeC4m(data)
-    expect(result).toBeNull()
-  })
-
-  it('returns null for binary data', async () => {
-    const data = new Uint8Array([0x00, 0x01, 0x02])
-    const result = await tryCanonicalizeC4m(data)
-    expect(result).toBeNull()
-  })
-
-  it('returns null for empty data', async () => {
-    const data = new Uint8Array(0)
-    const result = await tryCanonicalizeC4m(data)
-    expect(result).toBeNull()
+  it('returns null for plain text, binary data and empty data', async () => {
+    for (const data of [enc.encode('hello world'), new Uint8Array([0, 1, 2]), new Uint8Array(0)]) {
+      expect(await tryCanonicalizeC4m(data)).toBeNull()
+    }
   })
 })
 
-describe('MemoryStore canonicalizes c4m on put', () => {
-  it('stores canonical form and returns canonical ID', async () => {
+describe('MemoryStore keeps c4m text as its bytes', () => {
+  it('get(put(pretty)) is the pretty text, under its byte ID', async () => {
     const store = new MemoryStore()
     const m = await Manifest.parse(vector.canonical)
-    const pretty = m.encode({ pretty: true })
+    const pretty = enc.encode(m.encode({ pretty: true }))
 
-    const id = await store.put(enc.encode(pretty))
-    expect(id.toString()).toBe(vector.manifest_c4id)
-
-    // Retrieved content should be canonical, not pretty
-    const stream = await store.get(id)
-    const reader = stream.getReader()
-    const chunks: Uint8Array[] = []
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      chunks.push(value)
-    }
-    let total = 0
-    for (const c of chunks) total += c.length
-    const stored = new Uint8Array(total)
-    let offset = 0
-    for (const c of chunks) { stored.set(c, offset); offset += c.length }
-    const storedText = new TextDecoder().decode(stored)
-
-    // The stored text should be the canonical form (top-level entries only)
-    const canonicalText = m.copy().canonical()
-    // Canonicalize the parsed manifest to compare
-    const reparsed = await Manifest.parse(storedText)
-    const reparsedCanonical = reparsed.copy()
-    reparsedCanonical.canonicalize()
-    expect(reparsedCanonical.canonical()).toBe(canonicalText)
+    const id = await store.put(pretty)
+    expect(id.toString()).toBe((await identifyBytes(pretty)).toString())
+    const back = new Uint8Array(await new Response(await store.get(id)).arrayBuffer())
+    expect(new TextDecoder().decode(back)).toBe(new TextDecoder().decode(pretty))
   })
 })

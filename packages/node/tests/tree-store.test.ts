@@ -17,27 +17,25 @@ afterEach(async () => {
   }
 })
 
-describe('TreeStore c4m canonicalization', () => {
-  it('stores canonical form and returns canonical ID for c4m content', async () => {
+describe('TreeStore keeps c4m text as its bytes', () => {
+  it('stores pretty c4m as given, under its byte ID; the description ID is a separate question', async () => {
     tmpDir = await mkdtemp(join(tmpdir(), 'c4ts-tree-store-'))
     const store = new TreeStore(tmpDir)
 
     const m = await Manifest.parse(vector.canonical)
-    const pretty = m.encode({ pretty: true })
+    const pretty = enc.encode(m.encode({ pretty: true }))
 
-    const id = await store.put(enc.encode(pretty))
-    expect(id.toString()).toBe(vector.manifest_c4id)
+    // The ID is the bytes' ID, and the bytes come back exactly. Through
+    // 1.0.26 this returned the description ID and stored the one-level
+    // canonical listing instead.
+    const id = await store.put(pretty)
+    expect(id.toString()).toBe((await identifyBytes(pretty)).toString())
+    const stored = await streamToBytes(await store.get(id))
+    expect(new TextDecoder().decode(stored)).toBe(new TextDecoder().decode(pretty))
 
-    // Retrieved content should be canonical, not pretty
-    const stream = await store.get(id)
-    const stored = await streamToBytes(stream)
-    const storedText = new TextDecoder().decode(stored)
-
-    const reparsed = await Manifest.parse(storedText)
-    const reparsedCanonical = reparsed.copy()
-    reparsedCanonical.canonicalize()
-    const canonicalText = m.copy().canonical()
-    expect(reparsedCanonical.canonical()).toBe(canonicalText)
+    // The description it holds still resolves to its description ID.
+    const reparsed = await Manifest.parse(new TextDecoder().decode(stored))
+    expect((await reparsed.computeC4ID()).toString()).toBe(vector.manifest_c4id)
   })
 
   it('non-c4m content is stored and identified as raw bytes', async () => {

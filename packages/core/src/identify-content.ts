@@ -31,6 +31,12 @@ function looksLikeC4m(text: string): boolean {
  * Try to canonicalize data as a c4m file.
  * Returns the canonical bytes if the data parses as valid c4m,
  * or null if it does not.
+ *
+ * @deprecated Since 1.0.27 nothing in c4ts identifies, stores, scans,
+ * verifies or reconciles a re-rendered form: a file's C4 ID is its bytes.
+ * This returns text, not an ID, and is kept for code built against 1.0.26;
+ * it is removed in 1.1. For a description's ID use
+ * `(await Manifest.parse(text)).computeC4ID()`.
  */
 export async function tryCanonicalizeC4m(data: Uint8Array): Promise<Uint8Array | null> {
   // Quick binary check: c4m is text, reject if it contains null bytes
@@ -55,17 +61,17 @@ export async function tryCanonicalizeC4m(data: Uint8Array): Promise<Uint8Array |
 }
 
 /**
- * Identify content with c4m-aware canonicalization.
+ * The C4 ID of exactly these bytes.
  *
- * If the data parses as a valid c4m file, the C4 ID is computed from
- * the canonical form. Otherwise the raw bytes are hashed directly.
- * This ensures that differently-formatted c4m files describing the
- * same filesystem produce the same C4 ID.
+ * Through 1.0.26 this re-rendered anything that parsed as c4m to its
+ * one-level canonical listing first, so the ID named other bytes (the
+ * listing's, which is the description ID only for a flat tree). A file's
+ * C4 ID summons exactly that file, and c4m text is no exception.
+ *
+ * @deprecated Use `identifyBytes`, which this now is; removed in 1.1. For
+ * the ID of the description a c4m text holds use
+ * `(await Manifest.parse(text)).computeC4ID()`.
  */
 export async function identifyContent(data: Uint8Array): Promise<C4ID> {
-  const canonical = await tryCanonicalizeC4m(data)
-  if (canonical) {
-    return identifyBytes(canonical)
-  }
   return identifyBytes(data)
 }
