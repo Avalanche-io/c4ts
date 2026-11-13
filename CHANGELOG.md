@@ -18,13 +18,15 @@ for byte.
 - The shared `sequence-null-size-vector` (c4 commit 7a6ba94, #156) is
   copied byte for byte, and its decode half is tested.
 - New test: every vendored shared vector file is decoded and re-encoded
-  canonically, and the output's SHA-512 (node:crypto) is compared with the
-  input's. Files the library writes canonically must round-trip exactly;
-  files non-canonical by design (pretty form, a null size spelled `0`, a
-  legacy null mode, patch chains, a 3-space indent) and files rejected by
-  design are named with the reason, and an unclassified file fails.
-  `safename-vector/names.c4m` is rejected by c4ts, which refuses a name
-  that is not UTF-8 rather than replace it, where Go round-trips it.
+  canonically, as its vector README's "Round trip" table says (c4 #158 at
+  7cdc9f3; the READMEs and three canonical partners are copied from
+  there). The output's SHA-512 (node:crypto) must equal the file's own
+  (`itself`) or its canonical partner's; a chain must resolve to the
+  stated ID; a `refused` file must fail to decode. Every vendored file is
+  named by exactly one row, and an unknown cell fails.
+  `safename-vector/names.c4m` holds names that are not UTF-8, which c4ts
+  refuses rather than replace, as its README states: the test asserts the
+  refusal at its first such line and that every other line round-trips.
 - The c4 CLI that CI installs for the comparison with the Go CLI moves
   from 5ee54b6 to b17c393.
 

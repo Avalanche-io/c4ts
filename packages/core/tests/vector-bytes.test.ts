@@ -1,114 +1,163 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Manifest } from '../src/manifest.js'
 import { encode } from '../src/encoder.js'
 
-// Byte identity over every shared vector this port vendors (2026-11-13).
-// A c4m file's byte ID is a C4 ID, so a decode and canonical re-encode
-// that changes a byte writes a different file: nothing compared bytes
-// before, which is how such a loss could go unseen. Each .c4m under
-// fixtures/ is decoded and re-encoded canonically, and the SHA-512 of the
-// output is compared with the input's using node:crypto, never c4ts's own
-// C4 ID code.
+// Round trip over every shared vector this port vendors (2026-11-13; c4
+// #158 at 7cdc9f3). A c4m file's byte ID is a C4 ID, so a decode and
+// canonical re-encode that changes a byte writes a different file; nothing
+// compared bytes before, which is how such a loss could go unseen.
 //
-// Every file is classified below, and an unclassified file fails, so a
-// newly vendored vector cannot be passed over silently. The classes follow
-// the Go reference's measurement on c4 7a6ba94 (#156):
-// - stable: written canonically by the library; byte identity MUST hold.
-// - noncanonical: decodes, but is not canonical text by design (the
-//   vector's README says why); its re-encoding must differ, or this table
-//   is stale.
-// - rejected: refused on decode by design.
+// Each vector's README carries a "## Round trip" table, the one statement
+// every implementation reads (Go's TestVectorRoundTrip reads the same
+// table). For each .c4m file, decoded and then encoded canonically, the
+// second cell says what comes out, compared by SHA-512 from node:crypto,
+// never c4ts's own C4 ID code:
+// - `itself`: the output is the file, byte for byte;
+// - a backticked file: the output is that file (the canonical partner);
+// - `ID in` a backticked file: a chain whose resolved state has that ID;
+// - `refused`: decoding fails.
+// Any other cell fails. Every vendored .c4m must be named by exactly one
+// row (a glob row such as `*/*.c4m` counts); a row naming a file this port
+// does not vendor is ignored.
+//
+// One file is treated differently from its row, as its README states:
+// safename-vector/names.c4m holds names that are not UTF-8, which a
+// JavaScript string cannot hold exactly, so c4ts refuses it on decode
+// rather than replace a name (1.x). The test asserts that refusal, naming
+// the first such line, and checks that every other line round-trips.
 
 const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url))
 
-type Class =
-  | { kind: 'stable' }
-  | { kind: 'noncanonical'; why: string }
-  | { kind: 'rejected'; why: string }
+type Expect =
+  | { kind: 'itself' }
+  | { kind: 'file'; file: string }
+  | { kind: 'id'; file: string }
+  | { kind: 'refused' }
 
-const noncanonical: Record<string, string> = {
-  'backslash-name-vector/pretty.c4m': 'pretty form (README: "the Go encoder, pretty form")',
-  'link-target-vector/pretty.c4m': 'pretty form (README: "the Go encoder, pretty form")',
-  'zero-null-vector/pretty.c4m': 'pretty form',
-  'null-size-vector/zero-spelled.c4m': 'a null size spelled 0 (README: "canonical.c4m with the size field of every - line rewritten to 0")',
-  'sequence-null-size-vector/frames-zero-spelled.c4m': 'a null size spelled 0 (README: "frames.c4m with the null size field rewritten to 0")',
-  'legacy/ten-dash-null-1.0.21.c4m': 'legacy null mode: a real file written by c4 1.0.21 in pretty form',
-  'chain-vector/vector.c4m': 'a patch chain, which decodes to the resolved state',
-  'deepen-vector/deepen.c4m': 'a patch chain, which decodes to the resolved state',
-  'deepen-vector/remove.c4m': 'a patch chain, which decodes to the resolved state',
-  'name-escape-vector/ok-indent-3.c4m': 'non-canonical indent (README: written with SetIndent(3); canonical output always indents by 2)',
+interface Row { pattern: string; cell: string; expect: Expect }
+
+// rows reads a README's "## Round trip" table.
+function rows(readme: string): Row[] {
+  const lines = readme.split(/\r?\n/)
+  const start = lines.findIndex(l => l.trim() === '## Round trip')
+  if (start < 0) throw new Error('no "## Round trip" section')
+  const out: Row[] = []
+  for (const line of lines.slice(start + 1)) {
+    if (line.startsWith('## ')) break
+    if (!line.startsWith('|')) continue
+    const cells = line.split('|').slice(1, -1).map(c => c.trim())
+    if (cells[0] === 'File' || /^-+$/.test(cells[0])) continue
+    const name = /^`([^`]+)`$/.exec(cells[0])
+    if (cells.length !== 2 || !name) throw new Error(`malformed row: ${line}`)
+    out.push({ pattern: name[1], cell: cells[1], expect: parseCell(cells[1]) })
+  }
+  if (out.length === 0) throw new Error('an empty "## Round trip" table')
+  return out
 }
 
-function classify(rel: string): Class | undefined {
-  const [dir, file] = [rel.slice(0, rel.lastIndexOf('/')), rel.slice(rel.lastIndexOf('/') + 1)]
-  if (rel in noncanonical) return { kind: 'noncanonical', why: noncanonical[rel] }
-  if (rel === 'safename-vector/names.c4m') {
-    // Go round-trips this file byte for byte; c4ts refuses it on decode by
-    // design: it holds names whose bytes are not UTF-8, which a JavaScript
-    // string cannot hold exactly, and c4ts refuses a name rather than
-    // replace it (safename-vector.test.ts).
-    return { kind: 'rejected', why: 'names that are not UTF-8, which c4ts refuses rather than replace (Go round-trips it)' }
-  }
-  if (dir === 'chain-vector' && file.startsWith('bad-')) return { kind: 'rejected', why: 'a checkpoint that does not match' }
-  if (dir === 'damaged-line-vector' && file !== 'ok.c4m') return { kind: 'rejected', why: 'a damaged line' }
-  if (dir === 'name-escape-vector' && (file.startsWith('file-') || file === 'dir-unescaped-space.c4m')) {
-    return { kind: 'rejected', why: 'a name that is not escaped' }
-  }
-  if (dir === 'name-rule-vector' && !file.startsWith('ok-')) return { kind: 'rejected', why: 'a name that is a path' }
-  const stable = new Set([
-    'apply-from-vector/metadata-only/base.c4m',
-    'apply-from-vector/metadata-only/expected.c4m',
-    'apply-from-vector/metadata-only/patch.c4m',
-    'backslash-name-vector/canonical.c4m',
-    'backslash-name-vector/patch.c4m',
-    'childless-dir-vector/normalized.c4m',
-    'childless-dir-vector/stated.c4m',
-    'damaged-line-vector/ok.c4m',
-    'link-target-vector/canonical.c4m',
-    'link-target-vector/patch.c4m',
-    'name-escape-vector/ok-dir.c4m',
-    'name-escape-vector/ok-escaped.c4m',
-    'name-escape-vector/ok-file.c4m',
-    'name-rule-vector/ok-dir.c4m',
-    'name-rule-vector/ok-file.c4m',
-    'null-size-vector/canonical.c4m',
-    'sequence-null-size-vector/folded.c4m',
-    'sequence-null-size-vector/frames.c4m',
-    'zero-null-vector/canonical.c4m',
-  ])
-  return stable.has(rel) ? { kind: 'stable' } : undefined
+function parseCell(cell: string): Expect {
+  if (cell === 'itself') return { kind: 'itself' }
+  if (cell === 'refused') return { kind: 'refused' }
+  let m = /^`([^`]+)`$/.exec(cell)
+  if (m) return { kind: 'file', file: m[1] }
+  m = /^ID in `([^`]+)`$/.exec(cell)
+  if (m) return { kind: 'id', file: m[1] }
+  throw new Error(`unknown round-trip cell: ${cell}`)
+}
+
+// matches reports whether a row's pattern names rel (a path inside the
+// vector directory); "*" matches within one path segment.
+function matches(pattern: string, rel: string): boolean {
+  const re = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*')
+  return new RegExp(`^${re}$`).test(rel)
 }
 
 const walk = (d: string): string[] => readdirSync(d).flatMap(n => {
   const p = join(d, n)
   return statSync(p).isDirectory() ? walk(p) : p.endsWith('.c4m') ? [p] : []
 })
+const rel = (from: string, p: string) => relative(from, p).split('\\').join('/')
 const sha512 = (b: Uint8Array) => createHash('sha512').update(b).digest('hex')
-const files = walk(fixtures).map(p => relative(fixtures, p).split('\\').join('/')).sort()
+const reencode = async (text: string) => new TextEncoder().encode(encode(await Manifest.parse(text)))
 
-describe('every shared vector file re-encodes as its class says', () => {
+// The lines of names.c4m whose raw names are not UTF-8, by the raw bytes
+// cases.txt gives in hex (label, hex, name field as Go writes it).
+function nonUTF8Lines(dir: string, names: string): number[] {
+  const strict = new TextDecoder('utf-8', { fatal: true })
+  const bad = new Set<string>()
+  for (const line of readFileSync(join(dir, 'cases.txt'), 'utf8').split('\n')) {
+    const [, hex, field] = line.split(' ')
+    if (!hex || !field) continue
+    try {
+      strict.decode(Buffer.from(hex, 'hex'))
+    } catch {
+      bad.add(field)
+    }
+  }
+  return names.split('\n').flatMap((l, i) => [...bad].some(f => l.includes(` ${f} `)) ? [i + 1] : [])
+}
+
+const dirs = readdirSync(fixtures).filter(d => statSync(join(fixtures, d)).isDirectory() && walk(join(fixtures, d)).length > 0).sort()
+
+describe('every shared vector file round-trips as its README table says', () => {
   it('finds the vendored vectors', () => {
-    expect(files.length).toBeGreaterThan(50)
+    expect(dirs.length).toBeGreaterThan(10)
   })
 
-  for (const rel of files) {
-    const c = classify(rel)
-    const why = c && c.kind !== 'stable' ? `: ${c.why}` : ''
-    it(`${rel} is ${c?.kind ?? 'unclassified'}${why}`, async () => {
-      expect(c, `${rel} is not classified in vector-bytes.test.ts`).toBeDefined()
-      const bytes = readFileSync(join(fixtures, rel))
-      const text = bytes.toString('utf8')
-      if (c!.kind === 'rejected') {
-        await expect(Manifest.parse(text)).rejects.toThrow()
-        return
+  for (const d of dirs) {
+    const dir = join(fixtures, d)
+    const readme = join(dir, 'README.md')
+    const table = existsSync(readme) ? rows(readFileSync(readme, 'utf8')) : []
+
+    it(`${d}/README.md has a round-trip table naming each vendored file once`, () => {
+      expect(table.length, `${d}/README.md has no round-trip table`).toBeGreaterThan(0)
+      for (const f of walk(dir).map(p => rel(dir, p))) {
+        expect(table.filter(r => matches(r.pattern, f)).map(r => r.pattern), `${d}/${f}`).toHaveLength(1)
       }
-      const out = new TextEncoder().encode(encode(await Manifest.parse(text)))
-      if (c!.kind === 'stable') expect(sha512(out)).toBe(sha512(bytes))
-      else expect(sha512(out)).not.toBe(sha512(bytes))
     })
+
+    for (const f of walk(dir).map(p => rel(dir, p)).sort()) {
+      const row = table.find(r => matches(r.pattern, f))
+      const title = `${d}/${f}` === 'safename-vector/names.c4m'
+        ? `${d}/${f} is refused at its first name that is not UTF-8, and its other lines re-encode to themselves (README)`
+        : `${d}/${f} re-encodes to ${row?.cell ?? '(no row)'}`
+      it(title, async () => {
+        expect(row).toBeDefined()
+        const bytes = readFileSync(join(dir, f))
+        const text = bytes.toString('utf8')
+
+        if (`${d}/${f}` === 'safename-vector/names.c4m') {
+          const bad = nonUTF8Lines(dir, text)
+          expect(bad.length).toBeGreaterThan(0)
+          await expect(Manifest.parse(text)).rejects.toThrow(`line ${bad[0]}:`)
+          const kept = text.split('\n').filter((_, i) => !bad.includes(i + 1)).join('\n')
+          const keptBytes = new TextEncoder().encode(kept)
+          expect(sha512(await reencode(kept))).toBe(sha512(keptBytes))
+          return
+        }
+
+        const e = row!.expect
+        switch (e.kind) {
+          case 'refused':
+            await expect(Manifest.parse(text)).rejects.toThrow()
+            return
+          case 'itself':
+            expect(sha512(await reencode(text))).toBe(sha512(bytes))
+            return
+          case 'file':
+            expect(sha512(await reencode(text))).toBe(sha512(readFileSync(join(dir, e.file))))
+            return
+          case 'id': {
+            const want = readFileSync(join(dir, e.file), 'utf8').trim()
+            expect((await (await Manifest.parse(text)).computeC4ID()).toString()).toBe(want)
+            return
+          }
+        }
+      })
+    }
   }
 })
