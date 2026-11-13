@@ -28,7 +28,9 @@ every skipped or todo test with the source line that declared it, and fails
 the job when one is not named in `scripts/allowed-skips.txt` for that OS
 (`darwin`, `linux`, `win32` or `*`). A listed skip that did not happen is
 reported, not failed on. Decided 2026-11-13 by the release lead;
-reversible.
+reversible. Measured on CI, the list allows the two symlink tests and the
+unreadable-file test on Windows only, and the comparison with the Go CLI
+on every OS, since no runner has the c4 CLI installed.
 
 ### ⚠ SafeName's printable test is pinned to Unicode 17.0.0
 
