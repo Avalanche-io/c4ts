@@ -81,9 +81,13 @@ describe('chain-vector conformance', () => {
           'delete that line, or rewrite the file with `c4 id FILE.c4m > fixed.c4m`',
       )
     }
-    // Trailing blank lines do not change the shape.
+    // Trailing blank lines do not change the shape, and the error still
+    // names the bare ID's own line (the one its hint says to delete), not
+    // the line count at end of input.
     for (const [name, read] of readers) {
-      await expect(read(text + '\n\n'), name).rejects.toThrow(TrailingIDError)
+      const err = await read(text + '\n\n').then(() => null, (e: unknown) => e)
+      expect(err, name).toBeInstanceOf(TrailingIDError)
+      expect((err as Error).message, name).toContain(`(line ${line}):`)
     }
   })
 })
