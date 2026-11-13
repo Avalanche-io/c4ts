@@ -3,3 +3,16 @@
 # it), each with why. A skip not listed here fails CI (pnpm skips).
 # Shared-vector and cross-implementation tests are listed only for an OS
 # where their condition genuinely holds.
+
+# Measured 2026-11-13 on CI's three legs (macos-latest, ubuntu-latest,
+# windows-latest), PR #28's report-only run.
+
+# The Go reference CLI at /opt/homebrew/bin/c4; no CI runner has it.
+*     packages/node/tests/scanner.test.ts > scan matches the Go CLI byte for byte > c4 id <tree> and scan()+encode() produce identical text  # the c4 CLI is not installed
+
+# Windows: making a symlink needs a privilege the runner's user lacks.
+win32 packages/core/tests/scan-symlinks.test.ts > scan records symbolic links > a link to its own directory does not recurse  # no symlinks without the privilege
+win32 packages/core/tests/scan-symlinks.test.ts > scan records symbolic links > records each kind of link with Go's target and ID rules  # no symlinks without the privilege
+
+# Windows: chmod 000 leaves a file readable, so nothing is unreadable.
+win32 packages/core/tests/scan-unreadable.test.ts > scan with an unreadable file > records it with a null C4 ID and reports it  # chmod cannot make a file unreadable
