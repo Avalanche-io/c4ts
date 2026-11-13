@@ -4,6 +4,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
+    "test:json": "vitest run --reporter=default --reporter=json --outputFile.json=test-results/vitest.json",
+    "skips": "node scripts/skips.mjs test-results/vitest.json scripts/allowed-skips.txt",
     "test:watch": "vitest",
     "lint": "tsc --noEmit"
   },

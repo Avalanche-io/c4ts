@@ -1,0 +1,5 @@
+# Tests allowed to skip, by OS (process.platform: darwin, linux, win32; "*"
+# for any) and test ID (file > describe > title, as scripts/skips.mjs prints
+# it), each with why. A skip not listed here fails CI (pnpm skips).
+# Shared-vector and cross-implementation tests are listed only for an OS
+# where their condition genuinely holds.
