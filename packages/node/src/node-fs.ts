@@ -4,6 +4,19 @@ import type { FileSystem, DirEntry, FileStat } from '../../core/src/filesystem.j
 import { FileNotFoundError, bytesToStream, streamToBytes } from '../../core/src/filesystem.js'
 
 /**
+ * A stat's permission bits, as the Go reference reads them. On Windows
+ * neither side observes Unix permissions: Node and Go both give 0666, or
+ * 0444 when read-only, and Go also gives a directory 0111 (os.fileStat.Mode
+ * on windows), so a directory is drwxrwxrwx, or dr-xr-xr-x when read-only.
+ * Node does not, so a directory's mode, and the C4 ID of any directory
+ * above it, would differ from Go's.
+ */
+export function permissions(s: { mode: number; isDirectory(): boolean }, platform: string = process.platform): number {
+  const perm = s.mode & 0o7777
+  return platform === 'win32' && s.isDirectory() ? perm | 0o111 : perm
+}
+
+/**
  * FileSystem implementation backed by Node.js fs module.
  * Wraps node:fs/promises to provide the standard FileSystem interface.
  */
@@ -24,7 +37,7 @@ export class NodeFS implements FileSystem {
       const s = await stat(path)
       return {
         size: s.size,
-        mode: s.mode & 0o7777,
+        mode: permissions(s),
         mtime: s.mtime,
         isDirectory: s.isDirectory(),
         isSymlink: s.isSymbolicLink(),
@@ -87,7 +100,7 @@ export class NodeFS implements FileSystem {
       const s = await lstat(path)
       return {
         size: s.size,
-        mode: s.mode & 0o7777,
+        mode: permissions(s),
         mtime: s.mtime,
         isDirectory: s.isDirectory(),
         isSymlink: s.isSymbolicLink(),

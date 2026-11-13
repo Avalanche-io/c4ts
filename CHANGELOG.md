@@ -2,6 +2,22 @@
 
 ## Unreleased (1.1)
 
+### ⚠ On Windows, a directory's C4 ID changes for any tree with a subdirectory
+
+On Windows, `NodeFS` now records a directory's mode as the Go reference
+does: `drwxrwxrwx`, or `dr-xr-xr-x` when the directory is read-only. Go's
+`os.Stat` on Windows gives every entry 0666 (0444 when read-only) and adds
+0111 for a directory. Node gives the same bits without the 0111, so c4ts
+wrote `drw-rw-rw-`. Neither side observes Unix permissions on Windows, so
+Go's reading is the one to match. Files are unchanged: both give
+`-rw-rw-rw-`, or `-r--r--r--` when read-only.
+
+**This changes the C4 ID**, on Windows, of every directory that holds a
+subdirectory, and so the description ID of any tree with one. A directory
+holding only files keeps its ID, though its own line now reads
+`drwxrwxrwx`. Found by the comparison with the Go CLI, once it ran on CI's
+Windows leg.
+
 ### ⚠ SafeName's printable test is pinned to Unicode 17.0.0
 
 SafeName writes a printable code point as itself (Tier 1). c4ts decided
