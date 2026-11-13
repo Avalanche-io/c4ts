@@ -2,6 +2,32 @@
 
 ## Unreleased (1.1)
 
+### A folded sequence's size is null when a frame's size is null: vector, no change in c4ts
+
+The Go reference now writes a folded sequence's size as null when any
+frame's size is null, where it had added the frame's -1 into the sum
+(c4 #155; ruled 2026-11-13 by the maintainer: "One cannot use size as an
+expectation if there are nulls present, so we must say nothing"; decided
+for the ports 2026-11-13 by the release lead; reversible). c4ts does not
+fold sequences, and it already decodes a range's `-` size as null and
+keeps its range data, so nothing in c4ts changes and no C4 ID changes.
+Measured before this change: `folded.c4m` decoded to its stated root ID
+with the plate range known 24 and the shot range null, and re-encoded byte
+for byte.
+
+- The shared `sequence-null-size-vector` (c4 commit 7a6ba94, #156) is
+  copied byte for byte, and its decode half is tested.
+- New test: every vendored shared vector file is decoded and re-encoded
+  canonically, and the output's SHA-512 (node:crypto) is compared with the
+  input's. Files the library writes canonically must round-trip exactly;
+  files non-canonical by design (pretty form, a null size spelled `0`, a
+  legacy null mode, patch chains, a 3-space indent) and files rejected by
+  design are named with the reason, and an unclassified file fails.
+  `safename-vector/names.c4m` is rejected by c4ts, which refuses a name
+  that is not UTF-8 rather than replace it, where Go round-trips it.
+- The c4 CLI that CI installs for the comparison with the Go CLI moves
+  from 5ee54b6 to b17c393.
+
 ### ⚠ On Windows, a directory's C4 ID changes for any tree with a subdirectory
 
 On Windows, `NodeFS` now records a directory's mode as the Go reference

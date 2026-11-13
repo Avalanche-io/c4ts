@@ -12,3 +12,4 @@ packages/core/tests/fixtures/name-rule-vector/* -text
 packages/core/tests/fixtures/name-escape-vector/* -text
 packages/core/tests/fixtures/safename-vector/* -text
 packages/core/tests/fixtures/null-size-vector/* -text
+packages/core/tests/fixtures/sequence-null-size-vector/* -text

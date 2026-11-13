@@ -23,13 +23,15 @@ jobs:
           node-version: 20
           cache: pnpm
       # The Go reference CLI for the cross-implementation comparison in
-      # packages/node/tests/scanner.test.ts. Pinned to c4 master 5ee54b6
-      # (2026-11-13), so moving it is a deliberate bump.
+      # packages/node/tests/scanner.test.ts. Pinned to c4 master b17c393
+      # (2026-11-13: c4 #155, a folded sequence's size is null when a frame's
+      # is; was 5ee54b6), so moving it is a deliberate bump. It moves when
+      # core lands an output or ID change.
       - uses: actions/setup-go@v5
         with:
           go-version: stable
           cache: false
-      - run: go install github.com/Avalanche-io/c4/cmd/c4@5ee54b6
+      - run: go install github.com/Avalanche-io/c4/cmd/c4@b17c393
       - run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
         shell: bash
       - run: pnpm install --frozen-lockfile
