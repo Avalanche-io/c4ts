@@ -13,8 +13,16 @@ the job when one is not named in `scripts/allowed-skips.txt` for that OS
 (`darwin`, `linux`, `win32` or `*`). A listed skip that did not happen is
 reported, not failed on. Decided 2026-11-13 by the release lead;
 reversible. Measured on CI, the list allows the two symlink tests and the
-unreadable-file test on Windows only, and the comparison with the Go CLI
-on every OS, since no runner has the c4 CLI installed.
+unreadable-file test on Windows only.
+
+The comparison with the Go CLI no longer skips in CI. It finds `c4` through
+`C4_BIN` or `PATH` (it looked only at `/opt/homebrew/bin/c4`, which no
+runner has), and CI installs c4 master pinned at 5ee54b6. Since c4 1.1
+streams a directory scan as a chain, the test compares c4ts's
+`scan()`+`encode()` byte for byte with `c4 id <dir> | c4 patch -`, and
+checks that `c4 id -q <dir>` equals c4ts's description ID. A 1.0.x CLI
+cannot answer either (its `-q` prints nothing), so the test skips with
+one, and the guard fails CI if it ever does.
 
 ### ⚠ SafeName's printable test is pinned to Unicode 17.0.0
 
