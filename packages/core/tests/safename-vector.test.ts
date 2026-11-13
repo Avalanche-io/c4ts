@@ -9,8 +9,10 @@ import { formatName } from '../src/safename.js'
 // byte-identical copies). Four of its names hold bytes that are not UTF-8,
 // which a JS string cannot hold exactly. Through 1.0.26 c4ts decoded them
 // leniently, to U+FFFD: a different name and C4 ID, with no error. They are
-// refused now, naming the line, until it is decided whether c4ts carries
-// names as bytes (with Joshua).
+// refused, naming the line, for 1.x; every other name is written as Go
+// writes it, Tier 1 deciding "printable" from the table pinned to Unicode
+// 17.0.0 (both decided 2026-11-13 by the release lead; reversible; vector
+// README).
 
 const V = fileURLToPath(new URL('./fixtures/safename-vector/', import.meta.url))
 const read = (n: string): Promise<string> => readFile(V + n, 'utf8')
@@ -48,7 +50,7 @@ describe('SafeName vector: a name c4ts cannot hold exactly is refused, never rep
     }
   })
 
-  it.skip('held: writes every name as Go writes it (Tier 1 classes and the Unicode version are with Joshua)', async () => {
+  it('writes every name as Go writes it', async () => {
     for (const c of (await cases()).filter(c => !invalid.includes(c.label))) {
       expect(formatName(c.raw.toString('utf8'), false), c.label).toBe(c.field)
     }
