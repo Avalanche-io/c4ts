@@ -127,6 +127,7 @@ export {
   PathTraversalError,
   InvalidFlowTargetError,
   PatchIDMismatchError,
+  TrailingIDError,
   EmptyPatchError,
   BadIDLengthError,
   BadIDCharError,

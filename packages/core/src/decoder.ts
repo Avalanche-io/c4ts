@@ -11,6 +11,7 @@ import {
 import { unsafeName } from './safename.js'
 import {
   InvalidEntryError,
+  TrailingIDError,
 } from './errors.js'
 import type { Manifest } from './manifest.js'
 
@@ -494,20 +495,46 @@ function parseEntryFromLineFields(
  * resolving decoder — can verify each checkpoint against the accumulated
  * state and apply patch semantics. This shape-level reader records the
  * boundaries unverified (per the 2026-07-13 chain-grammar erratum, a
- * non-resolving reader MAY do so).
+ * non-resolving reader MAY do so), but it still refuses a stream that ends
+ * with a bare C4 ID (TrailingIDError, ruled 2026-11-08).
  */
 export interface DecodeResult {
   version: string
   base: C4ID | null
   entries: Entry[]
   sections: Entry[][]       // each section preceding a patch boundary (may be empty)
-  patchBoundaries: C4ID[]   // the bare C4 ID checkpoints between/after sections
+  patchBoundaries: C4ID[]   // the bare C4 ID checkpoint before each patch section
   boundaryLines: number[]   // 1-based line number of each checkpoint (for diagnostics)
   rangeData: Map<string, string>  // C4ID string -> inline ID list
 }
 
-/** Decode c4m text into a DecodeResult. */
+/**
+ * Decode c4m text into a DecodeResult.
+ *
+ * A stream ends on an entry line. A bare C4 ID is either the first-line
+ * external base reference or a checkpoint before a patch section; one at end
+ * of input is a format error (ruled 2026-11-08: a c4m file never ends with
+ * its own ID), refused with TrailingIDError. A file that is only a first-line
+ * base reference is not a trailing ID: it decodes to no entries with `base`
+ * set.
+ */
 export async function decode(text: string): Promise<DecodeResult> {
+  const { result, trailingIDLine } = await decodeSections(text)
+  if (trailingIDLine !== null) throw new TrailingIDError(trailingIDLine)
+  return result
+}
+
+/**
+ * The shared line reader behind decode() and Manifest.parse(). It records a
+ * trailing bare C4 ID as a final boundary and reports its line instead of
+ * refusing it, so the resolving decoder can verify that ID as a checkpoint
+ * first (a wrong trailing ID is a PatchIDMismatchError, as Go's decoder and
+ * the bad-validator.c4m vector pin) and then refuse the file. Not exported
+ * from the package: every public reader refuses the shape.
+ */
+export async function decodeSections(
+  text: string,
+): Promise<{ result: DecodeResult; trailingIDLine: number | null }> {
   const lines = text.split('\n')
   const result: DecodeResult = {
     version: '1.0',
@@ -524,6 +551,9 @@ export async function decode(text: string): Promise<DecodeResult> {
   let section: Entry[] = []
   let firstLine = true
   let patchMode = false
+  // The previous non-blank line was a checkpoint (not the base reference).
+  // Inline ID lists leave it as it was, as in Go's decoder.
+  let lastWasCheckpoint = false
 
   for (const rawLine of lines) {
     lineNum++
@@ -545,7 +575,7 @@ export async function decode(text: string): Promise<DecodeResult> {
       continue
     }
 
-    // Check for bare C4 ID (patch boundary / checkpoint / closing validator).
+    // Check for bare C4 ID (external base reference / checkpoint).
     if (isBareC4ID(trimmed)) {
       const id = parseC4ID(trimmed)
 
@@ -554,9 +584,11 @@ export async function decode(text: string): Promise<DecodeResult> {
         result.base = id
       } else {
         // A bare C4 ID after entries is a checkpoint naming the accumulated
-        // state. Consecutive checkpoints and a closing validator at EOF are
-        // legal (2026-07-13 erratum); the (possibly empty) section preceding
-        // each boundary is recorded so Manifest.parse's fold stays aligned.
+        // state. Consecutive checkpoints are legal when a patch follows the
+        // last of them (2026-07-13 erratum); the (possibly empty) section
+        // preceding each boundary is recorded so Manifest.parse's fold stays
+        // aligned. One at end of input is refused below.
+        lastWasCheckpoint = true
         result.sections.push(section)
         result.patchBoundaries.push(id)
         result.boundaryLines.push(lineNum)
@@ -576,11 +608,20 @@ export async function decode(text: string): Promise<DecodeResult> {
     const entry = parseEntryFromLine(rawLine, indentWidth, lineNum)
     section.push(entry)
     firstLine = false
+    lastWasCheckpoint = false
   }
 
-  // Flush remaining section. A stream may end with a closing validator (its
-  // last line was a bare C4 ID, already recorded above with an empty trailing
-  // section) or with an unclosed final patch (Section 10.7). Both are legal.
+  // A bare C4 ID at end of input is a format error (ruled 2026-11-08): a
+  // c4m file never ends with its own ID. Until then it was legal as a
+  // "closing validator". It stays recorded as the last boundary so the
+  // resolving decoder can verify it before refusing; decode() refuses it
+  // outright.
+  const trailingIDLine = lastWasCheckpoint
+    ? result.boundaryLines[result.boundaryLines.length - 1]
+    : null
+
+  // Flush remaining section: a chain ends on its last section's entries,
+  // the final patch, verified by no checkpoint after it (Section 10.7).
   if (section.length > 0) {
     result.sections.push(section)
   }
@@ -593,7 +634,7 @@ export async function decode(text: string): Promise<DecodeResult> {
     }
   }
 
-  return result
+  return { result, trailingIDLine }
 }
 
 /** Parse c4m text into entries (convenience). */

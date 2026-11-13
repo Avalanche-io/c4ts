@@ -15,8 +15,9 @@ import {
   DuplicatePathError,
   PathTraversalError,
   PatchIDMismatchError,
+  TrailingIDError,
 } from './errors.js'
-import { decode, type DecodeResult } from './decoder.js'
+import { decodeSections, type DecodeResult } from './decoder.js'
 import { encode } from './encoder.js'
 import { applyPatch } from './diff.js'
 
@@ -46,18 +47,22 @@ export class Manifest {
 
   /** Parse c4m text into a Manifest. */
   static async parse(text: string): Promise<Manifest> {
-    const result = await decode(text)
+    const { result, trailingIDLine } = await decodeSections(text)
 
-    // Chain grammar (SPECIFICATION.md "The Closing Validator", C4M-STANDARD
-    // §10.3/§10.5): a bare C4 ID after entries is a checkpoint naming the
-    // ACCUMULATED manifest state — never the preceding block's text. As the
-    // resolving decoder, parse() folds the sections and MUST verify each
+    // Chain grammar (SPECIFICATION.md "No Closing Validator", C4M-STANDARD
+    // §10.3/§10.5/§10.7): a bare C4 ID after entries is a checkpoint naming
+    // the ACCUMULATED manifest state — never the preceding block's text. As
+    // the resolving decoder, parse() folds the sections and MUST verify each
     // checkpoint against the accumulated C4 ID, rejecting on mismatch
-    // (PatchIDMismatchError). A bare C4 ID at EOF is the closing validator,
-    // verified identically; consecutive checkpoints each name the same state
-    // and each verify. Verification is skipped only when the stream opens with
-    // an external base reference (§10.2): the accumulated state is unknowable
-    // without fetching the base, so it defers to that resolver.
+    // (PatchIDMismatchError); consecutive checkpoints each name the same
+    // state and each verify. Verification is skipped only when the stream
+    // opens with an external base reference (§10.2): the accumulated state is
+    // unknowable without fetching the base, so it defers to that resolver.
+    //
+    // A bare C4 ID at end of input is a format error (ruled 2026-11-08; it
+    // was the "closing validator" until then). As in Go's decoder it is
+    // verified as a checkpoint first, so a wrong one is PatchIDMismatchError,
+    // and a right one is TrailingIDError.
     if (result.patchBoundaries.length > 0) {
       const skipVerify = result.base !== null
       const numBoundaries = result.patchBoundaries.length
@@ -96,8 +101,10 @@ export class Manifest {
         }
       }
 
-      // A trailing section past the last checkpoint is an unclosed final patch
-      // (Section 10.7): applied, but verified by no checkpoint.
+      if (trailingIDLine !== null) throw new TrailingIDError(trailingIDLine)
+
+      // The section past the last checkpoint is the final patch (Section
+      // 10.7): applied, verified by no checkpoint after it.
       const trailing = result.sections[numBoundaries]
       if (trailing && trailing.length > 0) {
         const patchManifest = new Manifest()

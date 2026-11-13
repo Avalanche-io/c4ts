@@ -42,6 +42,23 @@ export class PatchIDMismatchError extends C4Error {
   }
 }
 
+/**
+ * The stream ends with a bare C4 ID. A c4m file never ends with its own ID:
+ * a bare ID is a boundary before a patch, and a file that ends with one is a
+ * format error (ruled 2026-11-08). Files written by c4 1.0.13 through 1.0.26
+ * with `c4 diff >>` have this shape; c4 1.1's `c4 id FILE.c4m` rewrites them.
+ * `line` is the line of the trailing ID.
+ */
+export class TrailingIDError extends C4Error {
+  constructor(line: number) {
+    super(
+      `c4m: a bare C4 ID ends the file; a c4m file never ends with its own ID (line ${line}): ` +
+        'delete that line, or rewrite the file with `c4 id FILE.c4m > fixed.c4m`',
+    )
+    this.name = 'TrailingIDError'
+  }
+}
+
 export class EmptyPatchError extends C4Error {
   constructor(detail?: string) {
     super(detail ? `c4m: empty patch section (${detail})` : 'c4m: empty patch section')

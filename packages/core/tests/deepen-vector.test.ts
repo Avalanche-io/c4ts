@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { Manifest } from '../src/manifest.js'
 import { decode } from '../src/decoder.js'
 import { applyPatch } from '../src/diff.js'
+import { TrailingIDError } from '../src/errors.js'
 
 // Cross-implementation deepen-vs-remove vector (removal-rule erratum,
 // 2026-07-31). The shared conformance contract lives in the Go reference
@@ -34,10 +35,10 @@ const cases = [
 
 describe('deepen-vector conformance (removal-rule erratum 2026-07-31)', () => {
   it('resolves each fixture to exactly the pinned entries and root ID', async () => {
-    // The decoder verifies the interior checkpoint and the closing
-    // validator; an implementation carrying the old rule surfaces as a
-    // checkpoint mismatch here. The entry set is checked as well, since a
-    // non-verifying reader would simply return the wrong manifest.
+    // Both files end on their last entry (2026-11-08: no closing validator),
+    // so nothing in a file verifies its final state. The entry set and root
+    // ID are what pin the rule: a reader carrying the old removal rule
+    // simply returns the wrong manifest.
     const ids: Record<string, string> = {}
     for (const c of cases) {
       const text = await load(c.file)
@@ -71,6 +72,16 @@ describe('deepen-vector conformance (removal-rule erratum 2026-07-31)', () => {
       const applied = applyPatch(base, patch)
       expect(applied.entries.map(e => e.name).sort(), c.file).toEqual(c.want)
       expect((await applied.computeC4ID()).toString(), c.file).toBe((await load(c.idFile)).trim())
+    }
+  })
+
+  it('refuses each fixture with its own root ID appended as a final line', async () => {
+    // The shape the deepen vector had until 2026-11-08: a bare C4 ID at end
+    // of file is a format error, through both readers.
+    for (const c of cases) {
+      const text = (await load(c.file)) + (await load(c.idFile)).trim() + '\n'
+      await expect(Manifest.parse(text), c.file).rejects.toThrow(TrailingIDError)
+      await expect(decode(text), c.file).rejects.toThrow(TrailingIDError)
     }
   })
 })
