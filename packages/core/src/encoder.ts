@@ -132,6 +132,16 @@ export function encode(m: Manifest, options: EncoderOptions = {}): string {
 
   const lines: string[] = []
 
+  // A first-line bare ID is the external base this description refines
+  // (SPECIFICATION.md, external base reference). Decoding keeps it in
+  // `base`; writing it back keeps the round trip honest, in canonical and
+  // pretty form alike. Through 2026-11-13 it was dropped, so encoding a
+  // decoded block turned it into a standalone description of its own
+  // entries (Go core, c4 PR #145).
+  if (sorted.base !== null && !sorted.base.isNil()) {
+    lines.push(sorted.base.toString())
+  }
+
   if (pretty) {
     let maxSize = 0
     for (const entry of sorted.entries) {

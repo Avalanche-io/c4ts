@@ -2,6 +2,18 @@
 
 ## Unreleased (1.1)
 
+### Encoding a description keeps its external base
+
+`encode` (and `Manifest.encode`, `dumps`) never wrote a manifest's `base`,
+the first-line bare C4 ID naming the block a description refines, although
+`Manifest.parse`, `decode` and `loads` keep it. So parse then encode turned
+a block on a base into a standalone description of the block's own entries,
+silently (found 2026-11-13 in the Go reference, c4 PR #145). Canonical and
+pretty encoding now write a set base as the first line, then the entries
+exactly as before. A manifest with no base encodes byte for byte as before;
+the description ID and `canonical()` are unchanged. This package has no
+patch encoder that writes its own first line, so nothing else changes.
+
 ### ⚠ BREAKING: a c4m file that ends with a bare C4 ID is refused
 
 A bare C4 ID at the end of a c4m file is a format error (ruled 2026-11-08:
