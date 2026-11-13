@@ -18,6 +18,18 @@ holding only files keeps its ID, though its own line now reads
 `drwxrwxrwx`. Found by the comparison with the Go CLI, once it ran on CI's
 Windows leg.
 
+### CI fails on a skipped test the allow-list does not name
+
+A port can drift from a shared vector unnoticed when the test that compares
+them is skipped. CI now runs vitest with its JSON reporter
+(`pnpm test:json`, into `test-results/vitest.json`) and then
+`scripts/skips.mjs` (`pnpm skips`, Node standard library only), which lists
+every skipped or todo test with the source line that declared it, and fails
+the job when one is not named in `scripts/allowed-skips.txt` for that OS
+(`darwin`, `linux`, `win32` or `*`). A listed skip that did not happen is
+reported, not failed on. Decided 2026-11-13 by the release lead;
+reversible.
+
 ### ⚠ SafeName's printable test is pinned to Unicode 17.0.0
 
 SafeName writes a printable code point as itself (Tier 1). c4ts decided
