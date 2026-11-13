@@ -5,10 +5,9 @@
 # where their condition genuinely holds.
 
 # Measured 2026-11-13 on CI's three legs (macos-latest, ubuntu-latest,
-# windows-latest), PR #28's report-only run.
-
-# The Go reference CLI at /opt/homebrew/bin/c4; no CI runner has it.
-*     packages/node/tests/scanner.test.ts > scan matches the Go CLI byte for byte > c4 id <tree> and scan()+encode() produce identical text  # the c4 CLI is not installed
+# windows-latest), PR #28's report-only run. The comparison with the Go CLI
+# (packages/node/tests/scanner.test.ts) runs on every leg, against the c4
+# CLI that CI installs, and is listed nowhere.
 
 # Windows: making a symlink needs a privilege the runner's user lacks.
 win32 packages/core/tests/scan-symlinks.test.ts > scan records symbolic links > a link to its own directory does not recurse  # no symlinks without the privilege
