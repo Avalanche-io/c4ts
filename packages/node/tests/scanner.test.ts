@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { mkdtemp, rm, writeFile, mkdir, utimes } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile, mkdir, utimes, chmod, stat } from 'node:fs/promises'
 import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { delimiter, join } from 'node:path'
@@ -124,20 +124,29 @@ describe('scan matches the Go CLI byte for byte', () => {
     await utimes(join(tree, 'docs'), old, old)
     await utimes(join(tree, 'empty'), old, old)
     await utimes(join(tree, 'x', 'm.txt'), future, future)
+    // A read-only file: on Windows chmod 0o444 sets the read-only
+    // attribute, the one permission Windows has, and the mode both sides
+    // read from it must agree.
+    const ro = join(tree, 'two', 'a', 'ro.txt')
+    await writeFile(ro, 'ro\n')
+    await chmod(ro, 0o444)
+    expect((await stat(ro)).mode & 0o222).toBe(0)
 
     // c4 1.1 streams a directory scan as a chain (aggregates null, then a
     // refinement patch); `c4 patch -` flattens it to the one plain c4m that
     // c4ts writes, and `c4 id -q` names the description both resolve to.
     const opts = {
       encoding: 'utf8' as const,
-      env: { ...process.env, HOME: home, C4_STORE: join(home, 'store') },
+      env: { ...process.env, HOME: home, USERPROFILE: home, C4_STORE: join(home, 'store') },
     }
     const chain = execFileSync(GO_C4!, ['id', tree], opts)
     const goText = execFileSync(GO_C4!, ['patch', '-'], { ...opts, input: chain })
     const goID = execFileSync(GO_C4!, ['id', '-q', tree], opts).trim()
     const m = await scan(new NodeFS(), tree)
+    // Windows will not remove a read-only file.
+    await chmod(ro, 0o644)
     expect(m.encode()).toBe(goText)
-    expect(goText.split('\n').filter(l => l !== '').length).toBe(16)
+    expect(goText.split('\n').filter(l => l !== '').length).toBe(17)
     expect((await m.computeC4ID()).toString()).toBe(goID)
   })
 })
