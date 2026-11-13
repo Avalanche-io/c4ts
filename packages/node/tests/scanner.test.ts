@@ -131,22 +131,41 @@ describe('scan matches the Go CLI byte for byte', () => {
     await writeFile(ro, 'ro\n')
     await chmod(ro, 0o444)
     expect((await stat(ro)).mode & 0o222).toBe(0)
-
-    // c4 1.1 streams a directory scan as a chain (aggregates null, then a
-    // refinement patch); `c4 patch -` flattens it to the one plain c4m that
-    // c4ts writes, and `c4 id -q` names the description both resolve to.
-    const opts = {
-      encoding: 'utf8' as const,
-      env: { ...process.env, HOME: home, USERPROFILE: home, C4_STORE: join(home, 'store') },
+    // A read-only directory: on Windows the read-only attribute, set with
+    // attrib because chmod need not set it on a directory; elsewhere 0o555.
+    const roDir = join(tree, 'ro-dir')
+    await mkdir(roDir)
+    await writeFile(join(roDir, 'in.txt'), 'in\n')
+    const win = process.platform === 'win32'
+    if (win) {
+      execFileSync('attrib', ['+R', roDir])
+      const attrs = execFileSync('attrib', [roDir], { encoding: 'utf8' })
+      expect(attrs.slice(0, attrs.indexOf(roDir))).toContain('R')
+    } else {
+      await chmod(roDir, 0o555)
     }
-    const chain = execFileSync(GO_C4!, ['id', tree], opts)
-    const goText = execFileSync(GO_C4!, ['patch', '-'], { ...opts, input: chain })
-    const goID = execFileSync(GO_C4!, ['id', '-q', tree], opts).trim()
-    const m = await scan(new NodeFS(), tree)
-    // Windows will not remove a read-only file.
-    await chmod(ro, 0o644)
-    expect(m.encode()).toBe(goText)
-    expect(goText.split('\n').filter(l => l !== '').length).toBe(17)
-    expect((await m.computeC4ID()).toString()).toBe(goID)
+
+    try {
+      // c4 1.1 streams a directory scan as a chain (aggregates null, then a
+      // refinement patch); `c4 patch -` flattens it to the one plain c4m
+      // that c4ts writes, and `c4 id -q` names the description both resolve
+      // to.
+      const opts = {
+        encoding: 'utf8' as const,
+        env: { ...process.env, HOME: home, USERPROFILE: home, C4_STORE: join(home, 'store') },
+      }
+      const chain = execFileSync(GO_C4!, ['id', tree], opts)
+      const goText = execFileSync(GO_C4!, ['patch', '-'], { ...opts, input: chain })
+      const goID = execFileSync(GO_C4!, ['id', '-q', tree], opts).trim()
+      const m = await scan(new NodeFS(), tree)
+      expect(m.encode()).toBe(goText)
+      expect(goText.split('\n').filter(l => l !== '').length).toBe(19)
+      expect((await m.computeC4ID()).toString()).toBe(goID)
+    } finally {
+      // Windows will not remove a read-only file or directory.
+      await chmod(ro, 0o644)
+      if (win) execFileSync('attrib', ['-R', roDir])
+      else await chmod(roDir, 0o755)
+    }
   })
 })
