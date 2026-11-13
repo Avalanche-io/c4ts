@@ -29,6 +29,12 @@ for byte.
   refusal at its first such line and that every other line round-trips.
 - The c4 CLI that CI installs for the comparison with the Go CLI moves
   from 5ee54b6 to b17c393.
+- New test pinning the 2026-11-13 ruling the link-target-vector README
+  now carries (decided by the release lead; reversible): a symlink line
+  whose target has a flow target's shape (`host:path`, `C:foo`) reads as
+  a flow link under a null mode `-` and as the symlink under
+  `lrwxrwxrwx`. c4ts already read and wrote both as Go does (measured
+  against c4 b17c393), so nothing changes.
 
 ### ⚠ On Windows, a directory's C4 ID changes for any tree with a subdirectory
 
