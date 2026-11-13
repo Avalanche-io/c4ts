@@ -8,6 +8,7 @@ import {
   flowOperator,
   FlowDirection,
   isPathName,
+  sizeIsNull,
 } from './entry.js'
 import { formatName, formatTarget } from './safename.js'
 import { PathTraversalError } from './errors.js'
@@ -87,7 +88,7 @@ function formatEntryPretty(
     : formatTimestampPretty(entry.timestamp)
 
   let sizeStr: string
-  if (entry.size < 0) {
+  if (sizeIsNull(entry)) {
     const maxSizeStr = formatSizeWithCommas(maxSize)
     sizeStr = ' '.repeat(maxSizeStr.length - 1) + '-'
   } else {

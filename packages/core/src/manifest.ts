@@ -8,6 +8,8 @@ import {
   FlowDirection,
   NULL_SIZE,
   isPathName,
+  sizeIsNull,
+  EMPTY_CONTENT_ID,
 } from './entry.js'
 import { naturalLess } from './naturalsort.js'
 import {
@@ -328,7 +330,7 @@ export class Manifest {
         dirCount++
       } else {
         fileCount++
-        if (entry.size >= 0) totalSize += entry.size
+        if (!sizeIsNull(entry)) totalSize += entry.size
         else hasNull = true
       }
     }
@@ -493,18 +495,20 @@ export class Manifest {
 
 // ---- Metadata Propagation ----
 
-// The C4 ID of an empty listing: the ID of zero bytes. A directory with no
-// listed children and this ID is known to be empty.
-const EMPTY_LISTING_ID =
-  'c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT'
+// The C4 ID of an empty listing, which is the ID of zero bytes
+// (EMPTY_CONTENT_ID): one value, named for the directory reading. A
+// directory with no listed children and this ID is known to be empty.
+const EMPTY_LISTING_ID = EMPTY_CONTENT_ID
 
 function propagateMetadata(entries: Entry[]): void {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i]
     if (!isDir(entry)) continue
 
-    // Robust null check: size may be -1, null, or undefined at runtime.
-    const needsSize = !(entry.size >= 0)
+    // A size of 0 beside a C4 ID other than the empty content's is a null
+    // size too (ruled 2026-11-08; sizeIsNull). sizeIsNull also treats a
+    // size that is null or undefined at runtime as null.
+    const needsSize = sizeIsNull(entry)
     const needsTimestamp = entry.timestamp.getTime() === 0
 
     if (!needsSize && !needsTimestamp) continue
@@ -549,7 +553,7 @@ function getDirectoryChildren(entries: Entry[], dir: Entry): Entry[] {
 function calculateDirectorySize(entries: Entry[]): number {
   let total = 0
   for (const e of entries) {
-    if (!(e.size >= 0)) return -1
+    if (sizeIsNull(e)) return -1
     total += e.size
   }
   total += c4mContentSize(entries)

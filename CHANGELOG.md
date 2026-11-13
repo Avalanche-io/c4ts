@@ -2,6 +2,31 @@
 
 ## Unreleased (1.1)
 
+### ⚠ A size of 0 beside a C4 ID is a null size
+
+A size of 0 beside a C4 ID other than the empty content's
+(`c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT`)
+is now a null size on any entry that is not a symlink (ruled 2026-11-08;
+landed 2026-11-13 with the Go reference, c4 PR #68, decided by the release
+lead; reversible). A filesystem surface has no `-`, so a null size shows
+there as 0, and only the empty content truly has size 0.
+
+- New `sizeIsNull(entry)` is the one test, and new `EMPTY_CONTENT_ID` the
+  constant it checks against.
+- The decoder holds such a 0 as `NULL_SIZE`; `canonicalEntry`,
+  `formatEntry` and `encode` (canonical and pretty) write it as `-`, so
+  `0 f <ID>` and `- f <ID>` are one description with one C4 ID.
+- Directory size propagation treats it as null, so the parent's size goes
+  null over it; `hasNullValues`, `getNullFields` and `Manifest.summary`
+  report it as unknown.
+- Known zeros stay 0: a 0 with no C4 ID, a 0 with the empty content's ID,
+  and a symlink's 0.
+
+**This changes the C4 ID** of any description holding a 0 beside a
+non-empty C4 ID on a file or directory. No scanner writes that
+combination, so no scanned file changes meaning. The shared
+`null-size-vector` fixture is copied byte for byte from the Go reference.
+
 ### Encoding a description keeps its external base
 
 `encode` (and `Manifest.encode`, `dumps`) never wrote a manifest's `base`,

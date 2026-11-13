@@ -7,6 +7,8 @@ import {
   parseTimestamp,
   isDir,
   isPathName,
+  sizeIsNull,
+  NULL_SIZE,
 } from './entry.js'
 import { unsafeName } from './safename.js'
 import {
@@ -469,6 +471,11 @@ function parseEntryFromLineFields(
     flowDirection: fields.flowDir,
     flowTarget: fields.flowTarget,
   })
+
+  // A 0 beside the C4 ID of non-empty content is a null size written by a
+  // surface that has no "-" (a mount); hold it as null so every consumer
+  // sees one value for one meaning (sizeIsNull, ruled 2026-11-08).
+  if (sizeIsNull(entry)) entry.size = NULL_SIZE
 
   // A name is a bare entry name, checked once decoded, so an escaped "/"
   // is refused as surely as a raw one (name-rule vector).

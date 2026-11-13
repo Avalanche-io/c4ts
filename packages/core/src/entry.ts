@@ -19,6 +19,13 @@ export const NULL_TIMESTAMP = new Date(0)
 export const NULL_SIZE = -1
 
 /**
+ * The C4 ID of zero bytes: the only C4 ID a size of 0 can truthfully sit
+ * beside, and the ID of an empty directory's listing (Go `EmptyContentID`).
+ */
+export const EMPTY_CONTENT_ID =
+  'c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQdZrAkZzsWcbWtDg5oQstpDuni4Hirj75GEmTc1sFT'
+
+/**
  * The known zero mode: a regular file with no permission bits, written
  * `----------`. It is not the null mode, which is `mode === 0` and is
  * written `-`. The two differ for progressive resolution: null means not
@@ -126,11 +133,30 @@ export function flowOperator(dir: FlowDirection): string {
   }
 }
 
+/**
+ * Reports whether the entry's size is unknown. NULL_SIZE (any negative) is
+ * null. So is a stated 0 beside the C4 ID of content that is not empty: a
+ * filesystem surface has no number for "unknown", so a null size can only
+ * materialise as 0, and a 0 is contradicted by every C4 ID except the empty
+ * content's (ruled 2026-11-08; landed 2026-11-13, decided by the release
+ * lead; reversible; Go `Entry.SizeIsNull`). A 0 with no C4 ID is a known
+ * zero (a structure-level scan of an empty file). Symlinks are exempt: their
+ * size is the link's own and their C4 ID is the target's.
+ */
+export function sizeIsNull(e: Entry): boolean {
+  // Robust null check: size may be -1, null, or undefined at runtime.
+  if (!(e.size >= 0)) return true
+  return e.size === 0 &&
+    e.c4id !== null && e.c4id !== undefined && !e.c4id.isNil() &&
+    e.c4id.toString() !== EMPTY_CONTENT_ID &&
+    !isSymlink(e)
+}
+
 /** Returns true if entry has any null metadata values. */
 export function hasNullValues(e: Entry): boolean {
   const hasNullMode = isNullMode(e.mode)
   const hasNullTimestamp = e.timestamp.getTime() === 0
-  const hasNullSize = e.size < 0
+  const hasNullSize = sizeIsNull(e)
   return hasNullMode || hasNullTimestamp || hasNullSize
 }
 
@@ -139,7 +165,7 @@ export function getNullFields(e: Entry): string[] {
   const fields: string[] = []
   if (isNullMode(e.mode)) fields.push('Mode')
   if (e.timestamp.getTime() === 0) fields.push('Timestamp')
-  if (e.size < 0) fields.push('Size')
+  if (sizeIsNull(e)) fields.push('Size')
   return fields
 }
 
@@ -278,7 +304,7 @@ export function formatEntry(e: Entry, indentWidth: number, displayFormat: boolea
 
   // Size
   let sizeStr: string
-  if (e.size < 0) {
+  if (sizeIsNull(e)) {
     sizeStr = '-'
   } else {
     sizeStr = displayFormat ? formatSizeWithCommas(e.size) : e.size.toString()
@@ -329,8 +355,11 @@ export function canonicalEntry(e: Entry): string {
     timeStr = formatTimestamp(e.timestamp)
   }
 
+  // Null size renders as "-", including a 0 contradicted by the C4 ID
+  // (sizeIsNull), so the description's ID is the same however the null
+  // was written.
   let sizeStr: string
-  if (e.size < 0) {
+  if (sizeIsNull(e)) {
     sizeStr = '-'
   } else {
     sizeStr = e.size.toString()

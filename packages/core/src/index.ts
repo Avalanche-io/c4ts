@@ -25,6 +25,8 @@ export {
   formatSizeWithCommas,
   NULL_TIMESTAMP,
   NULL_SIZE,
+  EMPTY_CONTENT_ID,
+  sizeIsNull,
   ZERO_MODE,
   MODE_PERM_MASK,
   knownMode,
