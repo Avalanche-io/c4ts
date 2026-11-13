@@ -34,6 +34,7 @@ jobs:
         shell: bash
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: node scripts/measure-modes.mjs
       - run: pnpm test:json
       # Every skip is listed, and one scripts/allowed-skips.txt does not
       # name for this OS fails the job.
