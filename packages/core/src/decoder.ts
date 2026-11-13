@@ -11,6 +11,7 @@ import {
 import { unsafeName } from './safename.js'
 import {
   InvalidEntryError,
+  PatchIDMismatchError,
   TrailingIDError,
 } from './errors.js'
 import type { Manifest } from './manifest.js'
@@ -588,6 +589,14 @@ export async function decodeSections(
         // last of them (2026-07-13 erratum); the (possibly empty) section
         // preceding each boundary is recorded so Manifest.parse's fold stays
         // aligned. One at end of input is refused below.
+        // Consecutive checkpoints name the same state, so two different
+        // IDs there are a mismatch even here, where nothing is resolved
+        // (Go's DecodePatchChain since 2026-11-09).
+        const prev = result.patchBoundaries[result.patchBoundaries.length - 1]
+        if (lastWasCheckpoint && section.length === 0 && prev && prev.toString() !== id.toString()) {
+          throw new PatchIDMismatchError(lineNum, id.toString(), prev.toString(),
+            `consecutive checkpoints disagree: ${prev.toString()} then ${id.toString()}`)
+        }
         lastWasCheckpoint = true
         result.sections.push(section)
         result.patchBoundaries.push(id)

@@ -147,6 +147,20 @@ describe('chain grammar: where a bare C4 ID may stand', () => {
     expect(ok.base?.toString()).toBe(ckptA)
   })
 
+  it('refuses consecutive checkpoints that disagree, through every reader', async () => {
+    // Both of two consecutive checkpoints name the same accumulated state,
+    // so two different IDs there are a mismatch even for a reader that does
+    // not resolve (Go's DecodePatchChain since 2026-11-09).
+    const { aLine, ckptA, bLine } = await parts()
+    const other = (await load('resolved-root-id.txt')).trim()
+    expect(other).not.toBe(ckptA)
+    const stream = `${aLine}\n${ckptA}\n${other}\n${bLine}\n`
+    await expect(Manifest.parse(stream)).rejects.toThrow(PatchIDMismatchError)
+    await expect(decode(stream)).rejects.toThrow(PatchIDMismatchError)
+    await expect(decode(stream)).rejects.toThrow(`consecutive checkpoints disagree: ${ckptA} then ${other}`)
+    await expect(loads(stream)).rejects.toThrow(PatchIDMismatchError)
+  })
+
   it('keeps a file that is only a first-line base reference', async () => {
     // One bare ID and nothing else is the external base reference (§10.2),
     // not a trailing ID: no entries, base set, as before 2026-11-08.

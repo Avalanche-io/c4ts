@@ -36,8 +36,12 @@ export class InvalidFlowTargetError extends C4Error {
 }
 
 export class PatchIDMismatchError extends C4Error {
-  constructor(line: number, got: string, want: string) {
-    super(`c4m: patch ID does not match prior content: line ${line}: got ${got}, want ${want}`)
+  constructor(line: number, got: string, want: string, detail?: string) {
+    super(
+      detail
+        ? `c4m: patch ID does not match prior content (line ${line}): ${detail}`
+        : `c4m: patch ID does not match prior content: line ${line}: got ${got}, want ${want}`,
+    )
     this.name = 'PatchIDMismatchError'
   }
 }
