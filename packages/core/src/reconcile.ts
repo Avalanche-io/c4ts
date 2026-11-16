@@ -4,7 +4,7 @@ import type { FileSystem } from './filesystem.js'
 import { streamToBytes, bytesToStream, joinPath } from './filesystem.js'
 import type { Store } from './store.js'
 import type { Manifest } from './manifest.js'
-import { type Entry, isDir, isNullMode, permBits } from './entry.js'
+import { type Entry, isDir, isNullMode, permBits, NULL_TIMESTAMP } from './entry.js'
 
 /** Types of operations the reconciler can perform. */
 export type ReconcileOpType = 'mkdir' | 'create' | 'update' | 'remove' | 'rmdir'
@@ -21,6 +21,12 @@ export interface ReconcilePlan {
   operations: ReconcileOp[]
   missing: string[]    // C4 IDs needed but not in store
   skipped: string[]    // paths already correct
+  /**
+   * Every directory the c4m holds, with its entry. apply sets each one's
+   * recorded time and mode after all operations, deepest first, because
+   * writing a child changes a directory's mtime on a real filesystem.
+   */
+  directories?: Array<{ path: string; entry: Entry }>
 }
 
 /** Result of executing a reconciliation plan. */
@@ -54,9 +60,11 @@ export async function plan(
   // Build desired state from manifest
   const desired = new Map<string, Entry>()
   const desiredDirs = new Set<string>()
+  const directories: Array<{ path: string; entry: Entry }> = []
   for (const [path, entry] of manifest) {
     if (isDir(entry)) {
       desiredDirs.add(path)
+      directories.push({ path, entry })
     } else {
       desired.set(path, entry)
     }
@@ -134,7 +142,7 @@ export async function plan(
     operations.push({ type: isDirectory ? 'rmdir' : 'remove', path })
   }
 
-  return { operations, missing, skipped }
+  return { operations, missing, skipped, directories }
 }
 
 /**
@@ -156,6 +164,7 @@ export async function apply(
   }
 
   const ops = reconcilePlan.operations
+  const made = new Set<string>() // directories this apply created
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]
     const fullPath = joinPath(rootPath, op.path)
@@ -166,6 +175,7 @@ export async function apply(
       switch (op.type) {
         case 'mkdir':
           await fs.mkdir(fullPath, { recursive: true })
+          made.add(op.path)
           break
 
         case 'create':
@@ -201,6 +211,33 @@ export async function apply(
       }
     } catch (err) {
       result.errors.push({ path: op.path, error: err as Error })
+    }
+  }
+
+  // Post-pass: each directory's recorded time and mode, set after every
+  // child is written and deepest first, so setting a child directory does
+  // not move its parent's time again. A directory's timestamp and mode are
+  // part of its parent's listing, so without this the tree does not read
+  // back at the c4m's ID. Through 2026-11-16 directories kept the time they
+  // were made, so a checkout in a later second than the scan left every
+  // directory holding a subdirectory modified. A null timestamp on a
+  // directory this apply made becomes the epoch, so it reads back null; on
+  // one that already existed a null never overwrites, nor does a null mode
+  // (SPECIFICATION.md "Materializing null metadata"; core reconcile/apply.go).
+  if (fs.setMeta && reconcilePlan.directories) {
+    const dirs = [...reconcilePlan.directories].sort(
+      (a, b) => b.path.split('/').length - a.path.split('/').length,
+    )
+    for (const { path, entry } of dirs) {
+      const nullTime = entry.timestamp.getTime() === NULL_TIMESTAMP.getTime()
+      const mtime = nullTime ? (made.has(path) ? NULL_TIMESTAMP : undefined) : entry.timestamp
+      const mode = isNullMode(entry.mode) ? undefined : permBits(entry.mode)
+      if (mtime === undefined && mode === undefined) continue
+      try {
+        await fs.setMeta(joinPath(rootPath, path), { mode, mtime })
+      } catch (err) {
+        result.errors.push({ path, error: err as Error })
+      }
     }
   }
 
