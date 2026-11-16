@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { Manifest } from '../src/manifest.js'
 import { encode } from '../src/encoder.js'
+import { merge } from '../src/diff.js'
 
 // Cross-implementation vector: ID lists through merge, diff and patch
 // (2026-11-13). The shared contract lives in the Go reference repo at
@@ -16,14 +17,13 @@ import { encode } from '../src/encoder.js'
 // every range it holds and no list for a range it does not; none is
 // invented.
 //
-// This is the decode half. Resolving a chain keeps the lists of the ranges
-// the resolved state holds and drops the list of a range a patch removed
+// The decode half: resolving a chain keeps the lists of the ranges the
+// resolved state holds and drops the list of a range a patch removed
 // (remove-chain.c4m). A range line whose list is not inline is valid and
 // re-encodes as is (folded-no-lists.c4m). The lists never change a
-// description ID. c4ts has no sequence expander, so the expansion rows
-// (#160) do not apply; neither do the merge, diff and patch rows, which
-// c4ts's merge, applyPatch and patchDiff do not yet meet (they carry no
-// lists).
+// description ID. The operations half runs every merge, diff and patch row
+// of the vector's MUST table. c4ts has no sequence expander, so the two
+// expansion rows (#160) have no operation to run here.
 
 const dir = fileURLToPath(new URL('./fixtures/range-data-vector/', import.meta.url))
 const load = (name: string) => readFile(dir + name, 'utf8')
@@ -61,5 +61,36 @@ describe('range data vector (decode half)', () => {
       m.rangeData = new Map()
       expect((await m.computeC4ID()).toString(), f).toBe(id)
     }
+  })
+})
+
+// The operations half: the vector's MUST rows for merge, diff and patch.
+// Each output, encoded canonically, is the named file byte for byte. A
+// two-way merge is a three-way merge over an empty base, as core's
+// Merge(nil, a, b). A patch is written as c4 diff writes it: the old
+// state's C4 ID, then the patch's entries, then the lists of the ranges it
+// adds or changes.
+const parse = async (name: string) => Manifest.parse(await load(name))
+
+describe('range data vector (operations)', () => {
+  for (const [a, b] of [['folded.c4m', 'plain.c4m'], ['plain.c4m', 'folded.c4m']]) {
+    it(`merge ${a} with ${b} is merged.c4m: both lists carried`, async () => {
+      const { merged, conflicts } = merge(Manifest.create(), await parse(a), await parse(b))
+      expect(conflicts).toEqual([])
+      expect(merged.rangeData.size).toBe(2)
+      expect(encode(merged)).toBe(await load('merged.c4m'))
+    })
+  }
+
+  it('merge folded.c4m with itself is folded.c4m', async () => {
+    const { merged, conflicts } = merge(Manifest.create(), await parse('folded.c4m'), await parse('folded.c4m'))
+    expect(conflicts).toEqual([])
+    expect(encode(merged)).toBe(await load('folded.c4m'))
+  })
+
+  it('a merge that removes a range drops its list', async () => {
+    const { merged } = merge(await parse('folded.c4m'), await parse('no-plate.c4m'), await parse('folded.c4m'))
+    expect(merged.entries.some(e => e.name === PLATE)).toBe(false)
+    expect(encode(merged)).toBe(await load('no-plate.c4m'))
   })
 })

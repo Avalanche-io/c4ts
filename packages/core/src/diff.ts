@@ -1,5 +1,5 @@
 import { type Entry, isDir, canonicalEntry } from './entry.js'
-import { Manifest } from './manifest.js'
+import { Manifest, rangeDataFor } from './manifest.js'
 
 /** Result of diffing two manifests. */
 export interface DiffResult {
@@ -154,6 +154,14 @@ export function merge(base: Manifest, local: Manifest, remote: Manifest): MergeR
       }
     }
   }
+
+  // The merged state carries the ID list of every range it holds, from
+  // whichever input has it, and none for a range it does not, as a merge
+  // carries a subdirectory's listing (c4 #159; range-data vector,
+  // merged.c4m). Through 2026-11-16 the output kept the base's lists
+  // alone, so a range either side added lost its frames' C4 IDs, and a
+  // range a side removed kept its list.
+  merged.rangeData = rangeDataFor(merged.entries, base.rangeData, local.rangeData, remote.rangeData)
 
   return { merged, conflicts }
 }
