@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { Manifest } from '../src/manifest.js'
 import { encode } from '../src/encoder.js'
-import { merge } from '../src/diff.js'
+import { merge, applyPatch } from '../src/diff.js'
 
 // Cross-implementation vector: ID lists through merge, diff and patch
 // (2026-11-13). The shared contract lives in the Go reference repo at
@@ -93,5 +93,17 @@ describe('range data vector (operations)', () => {
     const { merged } = merge(await parse('folded.c4m'), await parse('no-plate.c4m'), await parse('folded.c4m'))
     expect(merged.entries.some(e => e.name === PLATE)).toBe(false)
     expect(encode(merged)).toBe(await load('no-plate.c4m'))
+  })
+
+  it('patch plain.c4m with add.c4m is folded.c4m', async () => {
+    const out = applyPatch(await parse('plain.c4m'), await parse('add.c4m'))
+    expect(out.rangeData.size).toBe(2)
+    expect(encode(out)).toBe(await load('folded.c4m'))
+  })
+
+  it('patch folded.c4m with remove.c4m is no-plate.c4m: the removed range takes its list with it', async () => {
+    const out = applyPatch(await parse('folded.c4m'), await parse('remove.c4m'))
+    expect(out.rangeData.size).toBe(1)
+    expect(encode(out)).toBe(await load('no-plate.c4m'))
   })
 })
