@@ -13,3 +13,5 @@ packages/core/tests/fixtures/name-escape-vector/* -text
 packages/core/tests/fixtures/safename-vector/* -text
 packages/core/tests/fixtures/null-size-vector/* -text
 packages/core/tests/fixtures/sequence-null-size-vector/* -text
+packages/core/tests/fixtures/range-data-vector/* -text
+packages/core/tests/fixtures/sequence-size-vector/* -text
