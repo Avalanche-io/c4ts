@@ -231,7 +231,15 @@ export function applyPatch(base: Manifest, patch: Manifest): Manifest {
     byPath.set(path, { ...patchEntry })
   }
 
-  result.entries = Array.from(byPath.values())
+  // Entries in full-path order, so each directory precedes its whole
+  // subtree, contiguously; sortEntries then orders siblings canonically.
+  // Through 2026-11-16 they kept the path map's insertion order, so an
+  // addition went to the end and sortEntries attached it to the last
+  // directory at its parent's depth: patching a/new.txt in while b/ also
+  // changed wrote b/new.txt (the patchDiff section-order test).
+  result.entries = Array.from(byPath.entries())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, e]) => e)
   result.invalidateIndex()
   result.sortEntries()
   // The patched state carries the ID list of every range it holds, from
@@ -258,25 +266,38 @@ export async function patchDiff(oldManifest: Manifest, newManifest: Manifest): P
   const added: Entry[] = []
   const modified: Entry[] = []
   const removed: Entry[] = []
+  // Every patch line, keyed by its full path, so the section can be written
+  // in tree order below.
+  const lines: Array<{ path: string; entry: Entry }> = []
   for (const [path, oldEntry] of oldPaths) {
     const newEntry = newPaths.get(path)
     if (!newEntry) {
       removed.push(oldEntry)
+      lines.push({ path, entry: oldEntry }) // removal: restate it exactly
     } else if (!entriesIdentical(oldEntry, newEntry)) {
       // Any field differs, a time or a mode alone included: the new line.
       modified.push(newEntry)
+      lines.push({ path, entry: newEntry })
     }
   }
   for (const [path, newEntry] of newPaths) {
-    if (!oldPaths.has(path)) added.push(newEntry)
+    if (!oldPaths.has(path)) {
+      added.push(newEntry)
+      lines.push({ path, entry: newEntry })
+    }
   }
 
+  // The section is written in tree order: sorted by full path, a directory
+  // comes before everything under it and its subtree is contiguous, so the
+  // encoder's sibling sort can then put files before directories, as every
+  // canonical listing does (the shared changeset vector, c4 #175). Through
+  // 2026-11-16 the lines went in as additions, modifications, removals, so
+  // an added file could precede its own directory's line and was written
+  // after a sibling directory's subtree: the bytes were not c4 diff's.
+  lines.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))
   const patch = Manifest.create()
-  // Additions and modifications — use new entries
-  for (const entry of added) patch.addEntry({ ...entry })
-  for (const entry of modified) patch.addEntry({ ...entry })
-  // Removals — restate original entry exactly
-  for (const entry of removed) patch.addEntry({ ...entry })
+  for (const { entry } of lines) patch.addEntry({ ...entry })
+  patch.sortEntries()
   // The patch carries the lists of the ranges it adds or changes, from the
   // new side; a removal line names a range the new state does not hold, so
   // it takes none (c4 #159; range-data vector, add.c4m and remove.c4m).
