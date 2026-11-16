@@ -285,6 +285,11 @@ export async function patchDiff(oldManifest: Manifest, newManifest: Manifest): P
   for (const entry of modified) patch.addEntry({ ...entry })
   // Removals — restate original entry exactly
   for (const entry of removed) patch.addEntry({ ...entry })
+  // The patch carries the lists of the ranges it adds or changes, from the
+  // new side; a removal line names a range the new state does not hold, so
+  // it takes none (c4 #159; range-data vector, add.c4m and remove.c4m).
+  // Through 2026-11-16 a patch carried no lists at all.
+  patch.rangeData = rangeDataFor([...added, ...modified], newManifest.rangeData)
 
   const oldID = await oldManifest.computeC4ID()
   return { oldID: oldID.toString(), patch }

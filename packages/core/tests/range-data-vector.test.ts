@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { Manifest } from '../src/manifest.js'
 import { encode } from '../src/encoder.js'
-import { merge, applyPatch } from '../src/diff.js'
+import { merge, applyPatch, patchDiff } from '../src/diff.js'
+import { C4ID } from '../src/id.js'
 
 // Cross-implementation vector: ID lists through merge, diff and patch
 // (2026-11-13). The shared contract lives in the Go reference repo at
@@ -72,6 +73,12 @@ describe('range data vector (decode half)', () => {
 // adds or changes.
 const parse = async (name: string) => Manifest.parse(await load(name))
 
+async function writtenPatch(oldName: string, newName: string): Promise<string> {
+  const { oldID, patch } = await patchDiff(await parse(oldName), await parse(newName))
+  patch.base = C4ID.parse(oldID)
+  return encode(patch)
+}
+
 describe('range data vector (operations)', () => {
   for (const [a, b] of [['folded.c4m', 'plain.c4m'], ['plain.c4m', 'folded.c4m']]) {
     it(`merge ${a} with ${b} is merged.c4m: both lists carried`, async () => {
@@ -92,6 +99,14 @@ describe('range data vector (operations)', () => {
     const { merged } = merge(await parse('folded.c4m'), await parse('no-plate.c4m'), await parse('folded.c4m'))
     expect(merged.entries.some(e => e.name === PLATE)).toBe(false)
     expect(encode(merged)).toBe(await load('no-plate.c4m'))
+  })
+
+  it('diff plain.c4m to folded.c4m is add.c4m: both lists after the entries', async () => {
+    expect(await writtenPatch('plain.c4m', 'folded.c4m')).toBe(await load('add.c4m'))
+  })
+
+  it('diff folded.c4m to no-plate.c4m is remove.c4m: a removal line takes no list', async () => {
+    expect(await writtenPatch('folded.c4m', 'no-plate.c4m')).toBe(await load('remove.c4m'))
   })
 
   it('patch plain.c4m with add.c4m is folded.c4m', async () => {
