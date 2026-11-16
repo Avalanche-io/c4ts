@@ -122,3 +122,21 @@ describe('range data vector (operations)', () => {
     expect(encode(out)).toBe(await load('no-plate.c4m'))
   })
 })
+
+// filter is an operation that builds a c4m from a c4m, so it carries the
+// lists of the ranges it keeps, as core's FilterByPath does. The vector has
+// no filter row; these hold it to the same rule over the vector's files.
+describe('range data vector (filter)', () => {
+  it('a filter that keeps every entry is folded.c4m', async () => {
+    const m = (await parse('folded.c4m')).filter(() => true)
+    expect(encode(m)).toBe(await load('folded.c4m'))
+  })
+
+  it('a filter that leaves out the plate range carries only the shot list', async () => {
+    const folded = await parse('folded.c4m')
+    const shot = folded.entries.find(e => e.name === 'shot.[001-003].exr')!
+    const m = folded.filter(p => p !== PLATE)
+    expect([...m.rangeData.keys()]).toEqual([shot.c4id!.toString()])
+    expect(m.rangeData.get(shot.c4id!.toString())).toBe(folded.rangeData.get(shot.c4id!.toString()))
+  })
+})
