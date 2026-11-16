@@ -10,3 +10,7 @@ packages/core/tests/fixtures/name-escape-vector/* -text
 packages/core/tests/fixtures/safename-vector/* -text
 packages/core/tests/fixtures/childless-dir-vector/* -text
 packages/node/tests/fixtures/blind-upgrade/* -text
+packages/core/tests/fixtures/range-data-vector/* -text
+packages/core/tests/fixtures/sequence-size-vector/* -text
+packages/core/tests/fixtures/sequence-null-size-vector/* -text
+packages/core/tests/fixtures/line-1.0.27/** -text

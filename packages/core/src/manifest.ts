@@ -56,7 +56,7 @@ export class Manifest {
       accumulated.version = result.version
       accumulated.base = result.base
       accumulated.entries = result.sections[0] ?? []
-      accumulated.rangeData = result.rangeData
+      accumulated.rangeData = rangeDataFor(accumulated.entries, result.rangeData)
 
       // Apply each patch section in sequence
       for (let i = 0; i < result.patchBoundaries.length; i++) {
@@ -66,7 +66,7 @@ export class Manifest {
           const patchManifest = new Manifest()
           patchManifest.entries = patchSection
           accumulated = applyPatch(accumulated, patchManifest)
-          accumulated.rangeData = result.rangeData
+          accumulated.rangeData = rangeDataFor(accumulated.entries, result.rangeData)
         }
       }
 
@@ -445,6 +445,32 @@ export class Manifest {
     this.entries = result
     this._index = null
   }
+}
+
+// ---- Inline range data ----
+
+// rangeDataFor returns the ID lists, taken from lists, of the folded
+// ranges among entries: one per range whose list some input carries, and
+// nothing else. A list no input carries stays absent; none is invented.
+// Lists are keyed by their own C4 ID, so the same key in two inputs is the
+// same list. A resolved chain keeps the list of every range it holds and no
+// list for a range a patch removed (c4 #159, design/range-data-through-
+// operations.md; range-data vector, remove-chain.c4m). Through 2026-11-16
+// c4ts kept every list a chain carried, so a removed range's list was
+// written out for a range the state no longer held.
+function rangeDataFor(entries: Entry[], ...lists: Map<string, string>[]): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const e of entries) {
+    if (!e.isSequence || !e.c4id || e.c4id.isNil()) continue
+    const key = e.c4id.toString()
+    for (const l of lists) {
+      const list = l.get(key)
+      if (list === undefined) continue
+      out.set(key, list)
+      break
+    }
+  }
+  return out
 }
 
 // ---- Metadata Propagation ----
