@@ -2,6 +2,30 @@
 
 ## Unreleased (1.1)
 
+### Checkout and reset set each directory's recorded time and mode
+
+**Fix, data correctness:** `reconcileApply`, and so `Workspace.checkout`
+and `Workspace.reset`, set the recorded time and mode on files only. A
+directory kept the time it was made and the platform's default mode. A
+directory's timestamp and mode are part of its parent's listing
+(SPECIFICATION.md, "Computing Directory C4 IDs"), so a checked-out tree did
+not read back at the c4m's C4 ID, and `diffFromCurrent` reported every
+directory holding a subdirectory as modified whenever the checkout ran in a
+later second than the scan. That was the ordinary case for a user, and
+the cause of the intermittent `workspace.test.ts` failure "diffFromCurrent
+is clean after checkout and reset of a tree with directories" (`sub/`
+reported modified), which passed only when the scan and the checkout fell
+in the same second.
+
+`apply` now sets every directory the c4m holds after all other
+operations, deepest first, because writing a child moves a directory's
+mtime on a real filesystem. A null timestamp on a directory the apply made
+becomes the epoch, so it reads back null. On a directory that already
+existed, a null timestamp or a null mode never overwrites. These are the
+rules of core's `reconcile/apply.go`. `ReconcilePlan` gains an optional
+`directories` list, each directory with its entry. No C4 ID of any c4m
+changes; the trees a checkout makes now match them.
+
 ### ⚠ A range's size counts its ID list, and every operation carries the ID lists of the ranges it keeps
 
 Core changed how folded sequences are sized and carried (c4 #159, #160 and
