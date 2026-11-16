@@ -2,6 +2,27 @@
 
 ## Unreleased (1.1)
 
+### `applyPatch` keeps an added entry under its own directory, and `patchDiff` writes `c4 diff`'s bytes
+
+**Fix, data correctness:** `applyPatch` collected the patched state in a
+path map's insertion order, so an addition went to the end and the tree
+sort attached it to the last directory at its parent's depth. Patching
+`a/new.txt` in while `b/` also changed produced `b/new.txt`. A chain
+decode applies patches the same way, so reading a `c4 diff >>` chain could
+put an added file in the wrong directory. Entries now go through in
+full-path order, so each directory precedes its whole subtree.
+
+`patchDiff` added its lines as additions, then modifications, then
+removals, so an added file could come before its own directory's line;
+written out, it followed a sibling directory's subtree, and the bytes were
+not `c4 diff`'s. The section is now built in full-path order and sorted
+canonically, files before directories. The shared changeset vector
+(c4 #175, `fixtures/changeset-vector/`, vendored byte for byte from c4
+0b410a2) pins it: `patchDiff(base, v2)`, written with the old state's ID
+as its base line, is `changeset.c4m` byte for byte. Measured on main
+before the change: that row failed (`new.txt` after `deep/`'s subtree),
+and so did a two-directory case for both functions.
+
 ### Checkout and reset set each directory's recorded time and mode
 
 **Fix, data correctness:** `reconcileApply`, and so `Workspace.checkout`
