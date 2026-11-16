@@ -242,6 +242,12 @@ export function applyPatch(base: Manifest, patch: Manifest): Manifest {
   result.entries = Array.from(byPath.values())
   result.invalidateIndex()
   result.sortEntries()
+  // The patched state carries the ID list of every range it holds, from
+  // the base or the patch, and none for a range the patch removed (c4
+  // #159; range-data vector, add.c4m onto plain.c4m). Through 2026-11-16
+  // it kept the base's lists alone, so a range the patch added lost its
+  // frames' C4 IDs, and a removed range kept its list.
+  result.rangeData = rangeDataFor(result.entries, base.rangeData, patch.rangeData)
   return result
 }
 
