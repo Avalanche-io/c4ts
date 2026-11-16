@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url'
 import { Manifest } from '../src/manifest.js'
 import { encode } from '../src/encoder.js'
 import { merge, applyPatch, patchDiff } from '../src/diff.js'
-import { C4ID } from '../src/id.js'
 
 // Cross-implementation vector: ID lists through merge, diff and patch
 // (2026-11-13). The shared contract lives in the Go reference repo at
@@ -71,13 +70,15 @@ describe('range data vector (decode half)', () => {
 // two-way merge is a three-way merge over an empty base, as core's
 // Merge(nil, a, b). A patch is written as c4 diff writes it: the old
 // state's C4 ID, then the patch's entries, then the lists of the ranges it
-// adds or changes.
+// adds or changes. On the 1.0.x line the encoder drops a base line (keeping
+// it is c4 #145, 1.1), so the old ID is printed before the encoded patch,
+// as core release/1.0.27's c4 diff does (cmd/c4/diff.go: Println(OldID),
+// then the patch).
 const parse = async (name: string) => Manifest.parse(await load(name))
 
 async function writtenPatch(oldName: string, newName: string): Promise<string> {
   const { oldID, patch } = await patchDiff(await parse(oldName), await parse(newName))
-  patch.base = C4ID.parse(oldID)
-  return encode(patch)
+  return oldID + '\n' + encode(patch)
 }
 
 describe('range data vector (operations)', () => {
