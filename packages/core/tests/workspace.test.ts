@@ -704,8 +704,12 @@ describe('Workspace', () => {
     const ws = new Workspace('work', fs, store)
     await ws.checkout(original)
 
-    // Directory entries in work/ have their own (newer) mtimes; the
-    // content they name is identical, so nothing is modified.
+    // checkout sets each directory's recorded time, so the tree reads back
+    // at original's ID. A directory's time is part of its parent's listing:
+    // through 2026-11-16 directories kept the time they were made, and this
+    // check failed (sub/ modified) whenever the scan and the checkout fell
+    // in different seconds. workspace-dir-metadata.test.ts pins that
+    // ordering with a fake clock.
     const d = await ws.diffFromCurrent()
     expect(d.modified.map(x => x.path)).toEqual([])
     expect(d.added.length).toBe(0)
