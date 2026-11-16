@@ -457,8 +457,9 @@ export class Manifest {
 // list for a range a patch removed (c4 #159, design/range-data-through-
 // operations.md; range-data vector, remove-chain.c4m). Through 2026-11-16
 // c4ts kept every list a chain carried, so a removed range's list was
-// written out for a range the state no longer held.
-function rangeDataFor(entries: Entry[], ...lists: Map<string, string>[]): Map<string, string> {
+// written out for a range the state no longer held. Every operation that
+// builds a c4m from c4m inputs calls it on its output.
+export function rangeDataFor(entries: Entry[], ...lists: Map<string, string>[]): Map<string, string> {
   const out = new Map<string, string>()
   for (const e of entries) {
     if (!e.isSequence || !e.c4id || e.c4id.isNil()) continue
