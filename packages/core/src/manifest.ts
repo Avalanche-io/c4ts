@@ -292,6 +292,10 @@ export class Manifest {
         filtered.entries.push({ ...entry })
       }
     }
+    // The filtered c4m carries the list of every range it keeps and none
+    // for a range it leaves out, as core's FilterByPath and FilterByPrefix
+    // do (c4 #159). Through 2026-11-16 it carried no lists at all.
+    filtered.rangeData = rangeDataFor(filtered.entries, this.rangeData)
     return filtered
   }
 
