@@ -54,15 +54,18 @@ function held(ns: bigint): bigint {
   return win ? floorDiv(ns, 100n) * 100n : ns
 }
 
-function setMtime(path: string, ns: bigint, isDir: boolean): void {
+/** Set each path's mtime, in order: one touch per path on POSIX, one PowerShell run on Windows. */
+function setMtimes(list: Array<{ path: string; ns: bigint; isDir: boolean }>): void {
   if (win) {
-    const ticks = 621_355_968_000_000_000n + floorDiv(ns, 100n)
-    const cls = isDir ? 'Directory' : 'File'
-    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
-      `[System.IO.${cls}]::SetLastWriteTimeUtc('${path}', [DateTime]::new(${ticks}, [DateTimeKind]::Utc))`])
-  } else {
-    execFileSync('touch', ['-m', '-d', isoNs(ns), path])
+    const lines = list.map(({ path, ns, isDir }) => {
+      const ticks = 621_355_968_000_000_000n + floorDiv(ns, 100n)
+      const cls = isDir ? 'Directory' : 'File'
+      return `[System.IO.${cls}]::SetLastWriteTimeUtc('${path}', [DateTime]::new(${ticks}, [DateTimeKind]::Utc))`
+    })
+    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', lines.join('; ')])
+    return
   }
+  for (const { path, ns } of list) execFileSync('touch', ['-m', '-d', isoNs(ns), path])
 }
 
 let tmpDir: string
@@ -85,10 +88,15 @@ async function build(): Promise<string> {
   const files = all.filter(r => !r.path.endsWith('/'))
   const dirs = all.filter(r => r.path.endsWith('/'))
     .sort((a, b) => b.path.split('/').length - a.path.split('/').length)
-  for (const r of [...files, ...dirs]) {
-    const p = join(tree, r.path)
-    await chmod(p, r.mode)
-    setMtime(p, r.ns, r.path.endsWith('/'))
+  for (const r of [...files, ...dirs]) await chmod(join(tree, r.path), r.mode)
+  setMtimes([...files, ...dirs].map(r => ({ path: join(tree, r.path), ns: r.ns, isDir: r.path.endsWith('/') })))
+  if (win) {
+    const seen: string[] = []
+    for (const r of all) {
+      const p = join(tree, r.path)
+      seen.push(`${r.path}: want ${held(r.ns)} bigint ${(await stat(p, { bigint: true })).mtimeNs} mtimeMs ${(await stat(p)).mtimeMs}`)
+    }
+    console.log('sub-second vector tree on win32:\n' + seen.join('\n'))
   }
   // The tree holds the vector's times, or the test proves nothing.
   for (const r of all) {
@@ -97,7 +105,7 @@ async function build(): Promise<string> {
   return tree
 }
 
-describe('sub-second vector', () => {
+describe('sub-second vector', { timeout: 30_000 }, () => {
   it('a scan records each mtime floored to its second, as saved.c4m shows', async () => {
     const tree = await build()
     const want = new Map<string, string>()
