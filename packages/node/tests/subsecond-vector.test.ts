@@ -54,15 +54,30 @@ function held(ns: bigint): bigint {
   return win ? floorDiv(ns, 100n) * 100n : ns
 }
 
-function setMtime(path: string, ns: bigint, isDir: boolean): void {
+/**
+ * Whether Node reads the time back. On Windows it reads a pre-1970 mtime
+ * 2^32 seconds late, in both stat forms (measured on windows-latest:
+ * pre-half.txt's −1.5 s, set and held by NTFS, reads as mtimeNs
+ * 4294967294500000000, mtimeMs 4294967294500, 2106-02-07). A genuine time
+ * from 2038 to 2106 reads the same way, so no scanner can undo it, and
+ * there the pre-1970 rows are not checked.
+ */
+function readable(ns: bigint): boolean {
+  return !(win && ns < 0n)
+}
+
+/** Set each path's mtime, in order: one touch per path on POSIX, one PowerShell run on Windows. */
+function setMtimes(list: Array<{ path: string; ns: bigint; isDir: boolean }>): void {
   if (win) {
-    const ticks = 621_355_968_000_000_000n + floorDiv(ns, 100n)
-    const cls = isDir ? 'Directory' : 'File'
-    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
-      `[System.IO.${cls}]::SetLastWriteTimeUtc('${path}', [DateTime]::new(${ticks}, [DateTimeKind]::Utc))`])
-  } else {
-    execFileSync('touch', ['-m', '-d', isoNs(ns), path])
+    const lines = list.map(({ path, ns, isDir }) => {
+      const ticks = 621_355_968_000_000_000n + floorDiv(ns, 100n)
+      const cls = isDir ? 'Directory' : 'File'
+      return `[System.IO.${cls}]::SetLastWriteTimeUtc('${path}', [DateTime]::new(${ticks}, [DateTimeKind]::Utc))`
+    })
+    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', lines.join('; ')])
+    return
   }
+  for (const { path, ns } of list) execFileSync('touch', ['-m', '-d', isoNs(ns), path])
 }
 
 let tmpDir: string
@@ -85,28 +100,33 @@ async function build(): Promise<string> {
   const files = all.filter(r => !r.path.endsWith('/'))
   const dirs = all.filter(r => r.path.endsWith('/'))
     .sort((a, b) => b.path.split('/').length - a.path.split('/').length)
-  for (const r of [...files, ...dirs]) {
-    const p = join(tree, r.path)
-    await chmod(p, r.mode)
-    setMtime(p, r.ns, r.path.endsWith('/'))
-  }
+  for (const r of [...files, ...dirs]) await chmod(join(tree, r.path), r.mode)
+  setMtimes([...files, ...dirs].map(r => ({ path: join(tree, r.path), ns: r.ns, isDir: r.path.endsWith('/') })))
   // The tree holds the vector's times, or the test proves nothing.
-  for (const r of all) {
+  for (const r of all.filter(r => readable(r.ns))) {
     expect((await stat(join(tree, r.path), { bigint: true })).mtimeNs, r.path).toBe(held(r.ns))
   }
   return tree
 }
 
-describe('sub-second vector', () => {
+/** Each path's timestamp field, for the rows whose times Node reads back. */
+async function times(m: Iterable<[string, { timestamp: Date }]>): Promise<Map<string, string>> {
+  const keep = new Set((await rows()).filter(r => readable(r.ns)).map(r => r.path))
+  const out = new Map<string, string>()
+  for (const [path, e] of m) if (keep.has(path)) out.set(path, formatTimestamp(e.timestamp))
+  return out
+}
+
+describe('sub-second vector', { timeout: 30_000 }, () => {
   it('a scan records each mtime floored to its second, as saved.c4m shows', async () => {
-    const tree = await build()
-    const want = new Map<string, string>()
-    for (const [path, e] of await Manifest.parse(await load('saved.c4m'))) want.set(path, formatTimestamp(e.timestamp))
-    const got = new Map<string, string>()
-    for (const [path, e] of await scan(new NodeFS(), tree)) got.set(path, formatTimestamp(e.timestamp))
-    expect(got).toEqual(want)
+    const got = await times(await scan(new NodeFS(), await build()))
+    expect(got).toEqual(await times(await Manifest.parse(await load('saved.c4m'))))
     expect(got.get('b.txt')).toBe('2025-06-15T15:06:40Z')
     expect(got.get('src/')).toBe('2025-06-15T15:06:42Z')
+  })
+
+  it.skipIf(win)('before 1970 the scan floors toward negative infinity', async () => {
+    const got = await times(await scan(new NodeFS(), await build()))
     expect(got.get('pre-half.txt')).toBe('1969-12-31T23:59:58Z')
     expect(got.get('pre-round.txt')).toBe('1969-12-31T23:59:58Z')
   })
