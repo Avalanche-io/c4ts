@@ -194,6 +194,13 @@ describe('a store c4ts wrote through 1.0.26', () => {
 const GO_C4 = process.env.C4_BIN
 
 describe('the Go CLI and c4ts read each other', { timeout: 300_000 }, () => {
+  // CI installs a pinned Go c4 and sets C4_BIN (.github/workflows/ci.yml);
+  // this line has no skip gate, so a missing CLI in CI fails here instead
+  // of skipping the two-way tests unnoticed.
+  it('CI provides the Go CLI', () => {
+    if (process.env.CI) expect(GO_C4, 'C4_BIN is not set in CI').toBeTruthy()
+  })
+
   const env = (dir: string) => ({ ...process.env, HOME: dir, USERPROFILE: dir, C4_STORE: join(dir, 'store') })
 
   async function goStores(dir: string, n: number): Promise<string[]> {

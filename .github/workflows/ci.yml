@@ -22,6 +22,17 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      # The Go reference CLI for the two-way store tests in
+      # packages/node/tests/tree-store-layout.test.ts, which read C4_BIN.
+      # Pinned to core release/1.0.27 ac8765f (2026-11-17, after c4 #172
+      # and #193 landed on that line), so moving it is a deliberate bump.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+      - run: go install github.com/Avalanche-io/c4/cmd/c4@ac8765f26b73418739b2d29477874ab53b90597d
+      - run: echo "C4_BIN=$(go env GOPATH)/bin/c4$(go env GOEXE)" >> "$GITHUB_ENV"
+        shell: bash
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test
