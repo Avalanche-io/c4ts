@@ -2,6 +2,20 @@
 
 ## Unreleased (1.1)
 
+### ⚠ A time inside the epoch second is null, for entries a caller builds too
+
+**Convergence fixed.** An entry built in memory with a time inside the
+epoch second (`new Date(500)`, say) was written `1970-01-01T00:00:00Z`,
+which reads back as null, so a manifest's C4 ID differed from the ID of its
+own text. Every null test compared the unfloored time with the epoch
+(`getTime() === 0`). The new `timestampIsNull` floors to the second first,
+and every null-time test (the encoder, the entry's null checks, the
+manifest's propagation and reconcile) uses it. The Node scan already
+floored the second (`secondOf`), so scanned trees don't change. **C4 IDs
+change** only for manifests holding a built entry timed in (0, 1) s after
+the epoch. Tested by core's shared epoch-second vector (c4 #192), vendored
+byte for byte.
+
 ### ⚠ `TreeStore` writes Go's store layout, and reads it and its own old one
 
 **Data visibility fixed.** c4ts's `TreeStore` wrote `<store>/c4/<the ID's

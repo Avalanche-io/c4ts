@@ -8,8 +8,7 @@ import {
   flowOperator,
   FlowDirection,
   isPathName,
-  sizeIsNull,
-} from './entry.js'
+  sizeIsNull, timestampIsNull } from './entry.js'
 import { formatName, formatTarget } from './safename.js'
 import { PathTraversalError } from './errors.js'
 
@@ -21,7 +20,7 @@ export interface EncoderOptions {
 
 /** Format a timestamp in human-readable local time. */
 function formatTimestampPretty(d: Date): string {
-  if (d.getTime() === 0) return '-                        '
+  if (timestampIsNull(d)) return '-                        '
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   const month = months[d.getMonth()]
   const day = d.getDate().toString().padStart(2, ' ')
@@ -83,7 +82,7 @@ function formatEntryPretty(
   // Null mode is "-" in pretty form too; the known zero is ten dashes.
   const modeStr = isNullMode(entry.mode) ? '-' : formatMode(entry.modeType, entry.mode)
 
-  const timeStr = entry.timestamp.getTime() === 0
+  const timeStr = timestampIsNull(entry.timestamp)
     ? '-                        '
     : formatTimestampPretty(entry.timestamp)
 

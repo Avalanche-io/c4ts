@@ -9,8 +9,7 @@ import {
   NULL_SIZE,
   isPathName,
   sizeIsNull,
-  EMPTY_CONTENT_ID,
-} from './entry.js'
+  EMPTY_CONTENT_ID, timestampIsNull } from './entry.js'
 import { naturalLess } from './naturalsort.js'
 import {
   InvalidEntryError,
@@ -540,7 +539,7 @@ function propagateMetadata(entries: Entry[]): void {
     // size too (ruled 2026-11-08; sizeIsNull). sizeIsNull also treats a
     // size that is null or undefined at runtime as null.
     const needsSize = sizeIsNull(entry)
-    const needsTimestamp = entry.timestamp.getTime() === 0
+    const needsTimestamp = timestampIsNull(entry.timestamp)
 
     if (!needsSize && !needsTimestamp) continue
 
@@ -604,10 +603,10 @@ function c4mContentSize(entries: Entry[]): number {
 function getMostRecentModtime(entries: Entry[]): Date {
   let mostRecent = new Date(0)
   for (const e of entries) {
-    if (e.timestamp.getTime() === 0) return new Date(0)
+    if (timestampIsNull(e.timestamp)) return new Date(0)
     if (e.timestamp > mostRecent) mostRecent = e.timestamp
   }
-  return mostRecent.getTime() === 0 ? new Date(0) : mostRecent
+  return timestampIsNull(mostRecent) ? new Date(0) : mostRecent
 }
 
 function formatBytes(bytes: number): string {

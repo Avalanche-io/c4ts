@@ -22,5 +22,8 @@ win32 packages/core/tests/scan-unreadable.test.ts > scan with an unreadable file
 win32 packages/node/tests/subsecond-vector.test.ts > sub-second vector > the scan is saved.c4m byte for byte, a diff against it is empty, and it resolves to root-id.txt  # no POSIX modes on Windows
 win32 packages/node/tests/subsecond-vector.test.ts > sub-second vector > before 1970 the scan floors toward negative infinity  # Node on Windows reads a pre-1970 mtime 2^32 s late (measured: -1.5 s reads as 4294967294.5 s)
 
+# Windows: no POSIX modes, and Node reads the epoch vector's pre-1970 row 2^32 s late.
+win32 packages/node/tests/epoch-second-vector.test.ts > epoch-second vector > the scan is saved.c4m byte for byte and resolves to root-id.txt  # no POSIX modes; Node reads pre-1970 times 2^32 s late
+
 # Windows: the 1.0.27 notes command for c4ts-only objects is a POSIX shell line.
 win32 packages/node/tests/tree-store-layout.test.ts > the notes command for c4ts-only objects > lists exactly the legacy files, plain and Go-split, and no Go-layout object  # POSIX find and awk

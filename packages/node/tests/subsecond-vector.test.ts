@@ -1,7 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { mkdtemp, rm, readFile, writeFile, mkdir, chmod, stat } from 'node:fs/promises'
-import { execFileSync } from 'node:child_process'
-import { basename, join } from 'node:path'
+import { mkdtemp, rm, readFile, mkdir } from 'node:fs/promises'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { NodeFS, secondOf } from '../src/node-fs.js'
@@ -9,6 +8,7 @@ import { scan } from '../../core/src/scanner.js'
 import { Manifest } from '../../core/src/manifest.js'
 import { diff, patchDiff } from '../../core/src/diff.js'
 import { formatTimestamp } from '../../core/src/entry.js'
+import { buildVectorTree, readable, vectorRows } from './vector-tree.js'
 
 // The shared sub-second vector (c4 #173, c4m/testdata/subsecond-vector),
 // vendored byte for byte under packages/core/tests/fixtures. Its MUST
@@ -27,58 +27,7 @@ import { formatTimestamp } from '../../core/src/entry.js'
 const dir = fileURLToPath(new URL('../../core/tests/fixtures/subsecond-vector/', import.meta.url))
 const load = (name: string) => readFile(dir + name, 'utf8')
 const win = process.platform === 'win32'
-
-interface Row { mode: number; ns: bigint; path: string }
-
-async function rows(): Promise<Row[]> {
-  return (await load('tree.txt')).split('\n').filter(l => l !== '').map(l => {
-    const [mode, ns, ...rest] = l.split(' ')
-    return { mode: parseInt(mode, 8), ns: BigInt(ns), path: rest.join(' ') }
-  })
-}
-
-function floorDiv(a: bigint, b: bigint): bigint {
-  const q = a / b
-  return a % b < 0n ? q - 1n : q
-}
-
-/** The instant as ISO 8601 with nanoseconds: the floored second plus a non-negative fraction. */
-function isoNs(ns: bigint): string {
-  const s = floorDiv(ns, 1_000_000_000n)
-  const frac = (ns - s * 1_000_000_000n).toString().padStart(9, '0')
-  return new Date(Number(s) * 1000).toISOString().slice(0, 19) + '.' + frac + 'Z'
-}
-
-/** What the platform can hold: nanoseconds, or NTFS's 100 ns ticks. */
-function held(ns: bigint): bigint {
-  return win ? floorDiv(ns, 100n) * 100n : ns
-}
-
-/**
- * Whether Node reads the time back. On Windows it reads a pre-1970 mtime
- * 2^32 seconds late, in both stat forms (measured on windows-latest:
- * pre-half.txt's −1.5 s, set and held by NTFS, reads as mtimeNs
- * 4294967294500000000, mtimeMs 4294967294500, 2106-02-07). A genuine time
- * from 2038 to 2106 reads the same way, so no scanner can undo it, and
- * there the pre-1970 rows are not checked.
- */
-function readable(ns: bigint): boolean {
-  return !(win && ns < 0n)
-}
-
-/** Set each path's mtime, in order: one touch per path on POSIX, one PowerShell run on Windows. */
-function setMtimes(list: Array<{ path: string; ns: bigint; isDir: boolean }>): void {
-  if (win) {
-    const lines = list.map(({ path, ns, isDir }) => {
-      const ticks = 621_355_968_000_000_000n + floorDiv(ns, 100n)
-      const cls = isDir ? 'Directory' : 'File'
-      return `[System.IO.${cls}]::SetLastWriteTimeUtc('${path}', [DateTime]::new(${ticks}, [DateTimeKind]::Utc))`
-    })
-    execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', lines.join('; ')])
-    return
-  }
-  for (const { path, ns } of list) execFileSync('touch', ['-m', '-d', isoNs(ns), path])
-}
+const rows = () => vectorRows(dir)
 
 let tmpDir: string
 
@@ -86,26 +35,11 @@ afterEach(async () => {
   if (tmpDir) await rm(tmpDir, { recursive: true, force: true })
 })
 
-/** Build tree.txt's tree: paths, then modes and times, files first and then directories deepest first. */
 async function build(): Promise<string> {
   tmpDir = await mkdtemp(join(tmpdir(), 'c4ts-subsecond-'))
   const tree = join(tmpDir, 'tree')
   await mkdir(tree)
-  const all = await rows()
-  for (const r of all) {
-    const p = join(tree, r.path)
-    if (r.path.endsWith('/')) await mkdir(p, { recursive: true })
-    else await writeFile(p, basename(r.path) + '\n')
-  }
-  const files = all.filter(r => !r.path.endsWith('/'))
-  const dirs = all.filter(r => r.path.endsWith('/'))
-    .sort((a, b) => b.path.split('/').length - a.path.split('/').length)
-  for (const r of [...files, ...dirs]) await chmod(join(tree, r.path), r.mode)
-  setMtimes([...files, ...dirs].map(r => ({ path: join(tree, r.path), ns: r.ns, isDir: r.path.endsWith('/') })))
-  // The tree holds the vector's times, or the test proves nothing.
-  for (const r of all.filter(r => readable(r.ns))) {
-    expect((await stat(join(tree, r.path), { bigint: true })).mtimeNs, r.path).toBe(held(r.ns))
-  }
+  await buildVectorTree(dir, tree)
   return tree
 }
 

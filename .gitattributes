@@ -17,4 +17,6 @@ packages/core/tests/fixtures/range-data-vector/* -text
 packages/core/tests/fixtures/sequence-size-vector/* -text
 packages/core/tests/fixtures/changeset-vector/* -text
 packages/core/tests/fixtures/subsecond-vector/* -text
+packages/core/tests/fixtures/epoch-second-vector/* -text
+
 packages/node/tests/fixtures/split-race-store/** -text

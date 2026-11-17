@@ -4,7 +4,7 @@ import type { FileSystem } from './filesystem.js'
 import { streamToBytes, bytesToStream, joinPath } from './filesystem.js'
 import type { Store } from './store.js'
 import type { Manifest } from './manifest.js'
-import { type Entry, isDir, isNullMode, permBits, NULL_TIMESTAMP } from './entry.js'
+import { type Entry, isDir, isNullMode, permBits, NULL_TIMESTAMP, timestampIsNull } from './entry.js'
 
 /** Types of operations the reconciler can perform. */
 export type ReconcileOpType = 'mkdir' | 'create' | 'update' | 'remove' | 'rmdir'
@@ -229,7 +229,7 @@ export async function apply(
       (a, b) => b.path.split('/').length - a.path.split('/').length,
     )
     for (const { path, entry } of dirs) {
-      const nullTime = entry.timestamp.getTime() === NULL_TIMESTAMP.getTime()
+      const nullTime = timestampIsNull(entry.timestamp)
       const mtime = nullTime ? (made.has(path) ? NULL_TIMESTAMP : undefined) : entry.timestamp
       const mode = isNullMode(entry.mode) ? undefined : permBits(entry.mode)
       if (mtime === undefined && mode === undefined) continue
