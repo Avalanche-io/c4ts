@@ -29,7 +29,7 @@ const report = await verify(manifest, fs, '/home/user/project')
 
 ### TreeStore
 
-Filesystem content store compatible with the Go and Python implementations. Uses the same on-disk layout: `store/c4/REMAINING_88_CHARS`. Writes are atomic (temp file then rename).
+Filesystem content store in Go's `store.TreeStore` layout, which c4py's `FSStore` shares: each object is a file named by its full 90-character C4 ID, in `store/<ID>` until a folder holds more than 4,096 objects, then split into `store/c4/<ID>` and `store/c4/XX/<ID>`. Stores written by c4ts 1.0.26 or earlier (`store/c4/<the ID's last 88 characters>`) stay readable. Writes are atomic (temp file then rename).
 
 ```typescript
 import { TreeStore, openStore } from '@avalanche-io/c4-node'
