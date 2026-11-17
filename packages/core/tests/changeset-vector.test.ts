@@ -9,7 +9,7 @@ import { MemoryFS } from '../src/memory-fs.js'
 import { scan } from '../src/scanner.js'
 
 // The shared changeset vector (c4 #175, c4m/testdata/changeset-vector),
-// vendored byte for byte from c4 bb44b43 (changeset-vector-rmdir), which adds
+// vendored byte for byte from c4 6549554 (#178, landed), which adds
 // the second step, v2 to v3, removing the directory sub/deep/. Its MUST rule:
 // every patch writer, given each step's old and new states, writes that
 // step's changeset byte for byte, and every chain reader resolves the step's
