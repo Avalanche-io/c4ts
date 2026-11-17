@@ -26,6 +26,25 @@ describe('a time is null at the format\'s resolution', () => {
     expect(text.split(' ')[1] === '-').toBe(isNull)
     const again = await Manifest.parse(text)
     expect((await m.computeC4ID()).toString()).toBe((await again.computeC4ID()).toString())
+    // The pretty form spells the same null and reads back to the same ID.
+    const pretty = m.encode({ pretty: true })
+    expect(pretty.trim().split(/ +/)[1] === '-').toBe(isNull)
+    expect((await (await Manifest.parse(pretty)).computeC4ID()).toString()).toBe((await m.computeC4ID()).toString())
+  })
+
+  it('a directory timed inside the epoch second is filled from its children, as a null one is', async () => {
+    const build = async (dirTime: Date) => {
+      const m = new Manifest()
+      m.addEntry(createEntry({ name: 'sub/', mode: 0o755, modeType: 'd', depth: 0, timestamp: dirTime }))
+      m.addEntry(createEntry({ name: 'a.txt', mode: 0o644, modeType: '-', depth: 1, timestamp: new Date(1_750_000_000_000), size: 1 }))
+      return m
+    }
+    const inside = await build(new Date(500))
+    const nullDir = await build(new Date(0))
+    expect(inside.encode()).toBe(nullDir.encode())
+    expect((await inside.computeC4ID()).toString()).toBe((await nullDir.computeC4ID()).toString())
+    const again = await Manifest.parse(inside.encode())
+    expect((await again.computeC4ID()).toString()).toBe((await inside.computeC4ID()).toString())
   })
 
   it('the epoch itself is still the null sentinel', () => {
