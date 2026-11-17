@@ -2,6 +2,35 @@
 
 ## Unreleased (1.1)
 
+### ⚠ `TreeStore` writes Go's store layout, and reads it and its own old one
+
+**Data visibility fixed.** c4ts's `TreeStore` wrote `<store>/c4/<the ID's
+last 88 characters>` and looked nowhere else. The c4 CLI and c4py write
+`<store>/<ID>`, then `c4/<ID>` and `c4/XX/<ID>` as the store splits. So
+in a shared store (both default to `~/.c4/store` and `C4_STORE`) c4ts read
+none of the CLI's objects and the CLI read none of c4ts's (measured: 0 of 3,
+0 of 34 in core's split-race-store fixture, 0 of 40 after a split, on 1.0.26,
+1.0.27 and master). A Go split before c4 #171 also moved c4ts's files to
+`c4/<88[0:2]>/<88>`, where c4ts did not look, so c4ts lost sight of its own
+objects; no bytes were deleted. The docstrings claiming the two were
+compatible were wrong.
+
+`TreeStore` now ports Go's `TreeStore` as landed in c4 f2b05d3: full-ID
+names, the root-first trie, the objects-only split (a journal, config or
+other file stays where it is), the top-down lookup through case variants,
+a three-way answer (an error other than not-found is never read as
+absent: `has` says no, `get`, `put` and `remove` raise it), `get`'s
+bounded re-search, `remove` of every copy, and a publish that lost a race
+to another writer of the same bytes counting as success. Stores c4ts wrote
+before stay readable, read-only: a lookup that finds nothing in Go's layout
+reads `c4/<88>` and `c4/<88[0:2]>/<88>` where they lie, and never moves,
+renames or deletes them. New objects go to Go's layout. Pinned by core's
+split-race-store fixture (vendored byte for byte from c4 f2b05d3) and a
+two-way test against the Go CLI, before and after a split.
+
+To list the objects only c4ts could see in a store (POSIX shells):
+`find "$C4_STORE/c4" -maxdepth 2 -type f | awk -F/ 'length($NF) == 88'`.
+
 ### ⚠ `patchDiff` removes a directory by restating its line alone
 
 **Fix, data correctness:** to remove a directory, `patchDiff` restated the
