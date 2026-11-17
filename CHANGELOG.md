@@ -2,6 +2,21 @@
 
 ## Unreleased (1.1)
 
+### ⚠ `patchDiff` removes a directory by restating its line alone
+
+**Fix, data correctness:** to remove a directory, `patchDiff` restated the
+directory's line and every entry under it. A directory restated with
+children under it is deepened, never removed (SPECIFICATION.md, "Patch
+Entry Semantics", the 2026-07-31 erratum), so c4ts's own patch removed the
+directory's files and kept the directory, and so did any chain made by
+appending it. A removed directory is now its own line alone, restated
+exactly, as core's `PatchDiff` writes it. The shared changeset vector's new
+step (c4 #178, vendored byte for byte from c4 6549554) pins this:
+`patchDiff(v2, v3)` is `changeset-v3.c4m` byte for byte, and `v2.c4m` with
+c4ts's own changeset appended resolves to `v3.c4m`. Measured on main
+ad671b3 before the change, four tests failed, among them both of those
+rows; every other row passed.
+
 ### ⚠ The Node scan records the second a file time falls in, as Go does
 
 **C4 IDs change.** `NodeFS.stat` and `lstat` gave the scan Node's
