@@ -269,9 +269,26 @@ export async function patchDiff(oldManifest: Manifest, newManifest: Manifest): P
   // Every patch line, keyed by its full path, so the section can be written
   // in tree order below.
   const lines: Array<{ path: string; entry: Entry }> = []
+  // A removed directory is restated alone: restated with children under it,
+  // it would be deepened, never removed (SPECIFICATION.md "Patch Entry
+  // Semantics", erratum 2026-07-31), as core's PatchDiff writes it. So no
+  // removal line is written for anything under a removed directory. Through
+  // 2026-11-16 each removed child was restated too, and c4ts's own patch for
+  // removing a directory read as a deepen.
+  const removedDirs = new Set<string>()
+  for (const [path, oldEntry] of oldPaths) {
+    if (isDir(oldEntry) && !newPaths.has(path)) removedDirs.add(path)
+  }
+  const underRemovedDir = (path: string): boolean => {
+    for (let i = path.indexOf('/'); i >= 0 && i < path.length - 1; i = path.indexOf('/', i + 1)) {
+      if (removedDirs.has(path.slice(0, i + 1))) return true
+    }
+    return false
+  }
   for (const [path, oldEntry] of oldPaths) {
     const newEntry = newPaths.get(path)
     if (!newEntry) {
+      if (underRemovedDir(path)) continue // its directory's line removes it
       removed.push(oldEntry)
       lines.push({ path, entry: oldEntry }) // removal: restate it exactly
     } else if (!entriesIdentical(oldEntry, newEntry)) {
