@@ -15,3 +15,8 @@ win32 packages/core/tests/scan-symlinks.test.ts > scan records symbolic links > 
 
 # Windows: chmod 000 leaves a file readable, so nothing is unreadable.
 win32 packages/core/tests/scan-unreadable.test.ts > scan with an unreadable file > records it with a null C4 ID and reports it  # chmod cannot make a file unreadable
+
+# Windows: no POSIX modes, so the sub-second vector's scan differs from
+# saved.c4m by mode alone (the vector's README, rule 2); its times and its
+# diff against its own saved c4m are still checked there.
+win32 packages/node/tests/subsecond-vector.test.ts > sub-second vector > the scan is saved.c4m byte for byte, a diff against it is empty, and it resolves to root-id.txt  # no POSIX modes on Windows

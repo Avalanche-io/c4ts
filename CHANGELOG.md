@@ -2,6 +2,25 @@
 
 ## Unreleased (1.1)
 
+### ⚠ The Node scan records the second a file time falls in, as Go does
+
+**C4 IDs change.** `NodeFS.stat` and `lstat` gave the scan Node's
+`stat.mtime`, a Date built from a float of milliseconds, so a time in the
+last half millisecond of a second was recorded as the next second, where Go
+writes the second it falls in. Measured on main before the change (and on
+the 1.0.26 package for the first two): `b.txt` (`…:40.9999997`) was `:41`
+and `src/` (`…:42.999999999`) was `:43`, where Go writes `:40` and `:42`;
+before 1970, `pre-round.txt` (−1.0000003 s) was `23:59:59Z`, where Go
+writes `23:59:58Z`. The same file then gave c4ts and
+Go different C4 IDs, as did every directory above it. The scan now reads
+`stat(path, { bigint: true })` and floors `mtimeNs` to whole seconds
+toward negative infinity (`secondOf`), so its entries hold exactly what
+their c4m lines carry, and c4ts scan IDs for such files now match the Go
+CLI's. The shared sub-second vector (c4 #173,
+`fixtures/subsecond-vector/`, vendored byte for byte from c4 5efd481,
+pre-1970 rows included) pins it: on main before the change its scan row
+failed for `b.txt`, `src/` and `pre-round.txt`.
+
 ### `applyPatch` keeps an added entry under its own directory, and `patchDiff` writes `c4 diff`'s bytes
 
 **Fix, data correctness:** `applyPatch` collected the patched state in a
