@@ -6,7 +6,8 @@ import type { C4ID } from './id.js'
  * Implementations:
  * - MemoryStore (core) — in-memory, for tests and small operations
  * - IndexedDBStore (core/browser) — persistent browser storage
- * - TreeStore (c4-node) — filesystem trie, compatible with Go/Python stores
+ * - TreeStore (c4-node) — filesystem trie in Go's store.TreeStore layout, which c4py
+ *   shares; through 1.0.26 c4ts wrote its own layout, which neither read
  */
 export interface Store {
   /** Check if content exists for the given ID. */

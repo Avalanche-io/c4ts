@@ -16,3 +16,4 @@ packages/core/tests/fixtures/sequence-null-size-vector/* -text
 packages/core/tests/fixtures/line-1.0.27/** -text
 packages/core/tests/fixtures/changeset-vector/* -text
 packages/core/tests/fixtures/subsecond-vector/* -text
+packages/node/tests/fixtures/split-race-store/** -text
