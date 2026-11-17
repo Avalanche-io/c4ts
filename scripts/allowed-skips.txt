@@ -20,3 +20,4 @@ win32 packages/core/tests/scan-unreadable.test.ts > scan with an unreadable file
 # saved.c4m by mode alone (the vector's README, rule 2); its times and its
 # diff against its own saved c4m are still checked there.
 win32 packages/node/tests/subsecond-vector.test.ts > sub-second vector > the scan is saved.c4m byte for byte, a diff against it is empty, and it resolves to root-id.txt  # no POSIX modes on Windows
+win32 packages/node/tests/subsecond-vector.test.ts > sub-second vector > before 1970 the scan floors toward negative infinity  # Node on Windows reads a pre-1970 mtime 2^32 s late (measured: -1.5 s reads as 4294967294.5 s)
