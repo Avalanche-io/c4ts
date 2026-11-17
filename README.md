@@ -16,15 +16,15 @@ import { identify, parse, Manifest, diff, verify, MemoryStore, MemoryFS } from '
 // Identify content -- async because WebCrypto is async
 const id = await identify(new TextEncoder().encode('Hello, World!'))
 console.log(id.toString())
-// c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvW...
+// c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8...
 
 // Parse an existing C4 ID
-const known = parse('c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvWUo8yu7Xs9kVjiDmVuS6SrKMHNQsJTz7TZLCQ37')
+const known = parse('c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8PZyENUh9uBHhWQ5HCvgb72Emg4nSazsTRophmx')
 
 // Parse a c4m file
 const manifest = await Manifest.parse(`
--rw-r--r-- 2025-03-15T10:30:00Z 1234 hello.txt c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvWUo8yu7Xs9kVjiDmVuS6SrKMHNQsJTz7TZLCQ37
--rw-r--r-- 2025-03-15T10:31:00Z 5678 world.txt c42yrSafety4SE7Gez2OPJNppHy6Z7mFAqCmih9DEmyz4CNULvuKJqgPV5r11MFGM8GgfPCq4sFcHdokqKYsToJgJK
+-rw-r--r-- 2025-03-15T10:30:00Z 1234 hello.txt c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8PZyENUh9uBHhWQ5HCvgb72Emg4nSazsTRophmx
+-rw-r--r-- 2025-03-15T10:31:00Z 5678 world.txt c41MKNsQqmAjq5V6M1exZEg458k7odf96XrLqv5UeeAud9F3K6v6KkfaQjc93FKBcfvV2kjcivsR8cNWMbZJy2HMQR
 `)
 
 // Diff two manifests
@@ -66,8 +66,8 @@ A c4m file is a human-readable text format that describes a filesystem without c
 
 ```
 -rw-r--r-- 2025-03-15T10:30:00Z    1,234 hello.txt   c459dsjfsc...
--rw-r--r-- 2025-03-15T10:31:00Z    5,678 world.txt   c42yrSafet...
-drwxr-xr-x 2025-03-15T10:31:00Z    6,912 src/
+-rw-r--r-- 2025-03-15T10:31:00Z    5,678 world.txt   c41MKNsQqm...
+drwxr-xr-x 2025-03-15T10:31:00Z    2,184 src/
   -rw-r--r-- 2025-03-15T10:30:00Z  2,048 main.ts     c4Kq8HTriN...
 ```
 
@@ -89,7 +89,7 @@ const id = await identifyBytes(new Uint8Array([1, 2, 3]))
 const id2 = await identify(someStream)
 
 // Parse a C4 ID string (synchronous -- no hashing, just base58 decode)
-const id3 = parse('c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvWUo8yu7Xs9kVjiDmVuS6SrKMHNQsJTz7TZLCQ37')
+const id3 = parse('c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8PZyENUh9uBHhWQ5HCvgb72Emg4nSazsTRophmx')
 // or
 const id4 = C4ID.parse('c459dsjfsc...')
 
@@ -283,7 +283,7 @@ The `ContentSource` interface is broader than `Store` -- any object that serves 
 
 ### Scanner
 
-Walks a filesystem directory and builds a sorted Manifest with C4 IDs. Directories are resolved bottom-up exactly as the Go CLI does: each keeps its own mtime, its size is its children's sizes plus the bytes of their canonical listing, and its C4 ID is the ID of that one-level listing — so `scan()` + `encode()` is byte-identical to `c4 id <dir>`.
+Walks a filesystem directory and builds a sorted Manifest with C4 IDs. Directories are resolved bottom-up exactly as the Go CLI does: each keeps its own mtime, its size is its children's sizes plus the bytes of their canonical listing, and its C4 ID is the ID of that one-level listing — so `scan(fs, dir, { skipHidden: false })` + `encode()` is byte-identical to `c4 id <dir>` (by default `scan()` skips dotfiles and dot-directories, which `c4 id` lists).
 
 ```typescript
 import { scan } from '@avalanche-io/c4'
@@ -496,7 +496,7 @@ pool.size        // number of workers
 
 ## Node.js
 
-The `@avalanche-io/c4-node` package re-exports everything from core plus Node-specific implementations.
+The `@avalanche-io/c4-node` package carries its own copy of core and re-exports all of it, plus Node-specific implementations. In Node, import everything from `@avalanche-io/c4-node`: its classes are not `@avalanche-io/c4`'s, so mixing the two breaks `instanceof` checks.
 
 ```typescript
 import { NodeFS, TreeStore, openStore, identify, Manifest } from '@avalanche-io/c4-node'
@@ -548,8 +548,8 @@ The `ContentResolver` adds a third axis: multi-source content fetching with race
 ## Works With
 
 - **[c4](https://github.com/Avalanche-io/c4)** -- Go reference implementation and CLI
-- **[c4py](https://github.com/Avalanche-io/c4-python)** -- Python implementation
-- **[c4d](https://github.com/Avalanche-io/c4d)** -- C4 daemon for peer-to-peer content distribution
+- **[c4py](https://github.com/Avalanche-io/c4py)** -- Python implementation
+- **c4d** -- C4 daemon for peer-to-peer content distribution
 - **[libc4](https://github.com/Avalanche-io/libc4)** -- C implementation
 
 ## Compatibility

@@ -5,7 +5,7 @@ Node.js extensions for C4 Universal Content Identification.
 [![npm](https://img.shields.io/npm/v/@avalanche-io/c4-node.svg)](https://www.npmjs.com/package/@avalanche-io/c4-node)
 [![Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Adds `NodeFS` and `TreeStore` on top of [@avalanche-io/c4](https://www.npmjs.com/package/@avalanche-io/c4). Re-exports everything from core, so you only need one import.
+Adds `NodeFS` and `TreeStore` on top of [@avalanche-io/c4](https://www.npmjs.com/package/@avalanche-io/c4). Carries its own copy of core and re-exports it, so import everything from `@avalanche-io/c4-node`; mixing it with `@avalanche-io/c4` imports breaks `instanceof` checks.
 
 ## Install
 

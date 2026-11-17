@@ -1,5 +1,7 @@
 # c4ts Architecture — Open Source Package Design
 
+Status: written before 1.0; the API shapes here predate it. README.md is the current API.
+
 ## Principle
 
 Provide a complete, composable toolkit for building C4 applications in any JavaScript environment. The packages define abstract interfaces and ship concrete implementations for Node.js and browsers. Anyone can combine them to build desktop apps, web tools, CLI utilities, or editor extensions.

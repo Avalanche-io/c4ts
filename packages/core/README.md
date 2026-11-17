@@ -23,15 +23,15 @@ import { identify, parse, Manifest, diff, verify } from '@avalanche-io/c4'
 // Identify content (async -- WebCrypto)
 const id = await identify(new TextEncoder().encode('Hello, World!'))
 console.log(id.toString())
-// c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvW...
+// c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8...
 
 // Parse an existing C4 ID (synchronous)
-const known = parse('c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvWUo8yu7Xs9kVjiDmVuS6SrKMHNQsJTz7TZLCQ37')
+const known = parse('c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8PZyENUh9uBHhWQ5HCvgb72Emg4nSazsTRophmx')
 
 // Parse a c4m file
 const manifest = await Manifest.parse(`
--rw-r--r-- 2025-03-15T10:30:00Z 1234 hello.txt c459dsjfscH38cYeXXYogktxf4Cd9ibshE3BHUo6a58hBXmRQ1rvWUo8yu7Xs9kVjiDmVuS6SrKMHNQsJTz7TZLCQ37
--rw-r--r-- 2025-03-15T10:31:00Z 5678 world.txt c42yrSafety4SE7Gez2OPJNppHy6Z7mFAqCmih9DEmyz4CNULvuKJqgPV5r11MFGM8GgfPCq4sFcHdokqKYsToJgJK
+-rw-r--r-- 2025-03-15T10:30:00Z 1234 hello.txt c4278VoUM5dXnzULoTV6JqiyoeyFaL4DZo2oDPTsmDAE4Ki4Uwe8PZyENUh9uBHhWQ5HCvgb72Emg4nSazsTRophmx
+-rw-r--r-- 2025-03-15T10:31:00Z 5678 world.txt c41MKNsQqmAjq5V6M1exZEg458k7odf96XrLqv5UeeAud9F3K6v6KkfaQjc93FKBcfvV2kjcivsR8cNWMbZJy2HMQR
 `)
 
 // Diff two manifests
