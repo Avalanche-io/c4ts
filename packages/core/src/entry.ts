@@ -15,6 +15,21 @@ export const TIMESTAMP_FORMAT = 'YYYY-MM-DDTHH:MM:SSZ'
 /** Unix epoch — the sentinel for null/unspecified timestamps. */
 export const NULL_TIMESTAMP = new Date(0)
 
+/**
+ * Whether a time is null at the format's resolution: the second it falls
+ * in is the epoch. A c4m line carries the second a time falls in, and the
+ * epoch is null (SPECIFICATION.md, "Timestamp": "-" or "0"), so a time
+ * inside the epoch second, such as 0.5 s, is null and its line is "-".
+ * Through 1.0.27 every null test compared the unfloored time with the
+ * epoch, so an entry built with such a time was written
+ * 1970-01-01T00:00:00Z, which reads back as null, and a manifest's C4 ID
+ * differed from the ID of its own text (core's epoch-second vector,
+ * c4 #192). The second a millisecond time falls in is floor(ms / 1000).
+ */
+export function timestampIsNull(d: Date): boolean {
+  return Math.floor(d.getTime() / 1000) === 0
+}
+
 /** Sentinel for null/unspecified size. */
 export const NULL_SIZE = -1
 
@@ -97,7 +112,7 @@ export function flowOperator(dir: FlowDirection): string {
 /** Returns true if entry has any null metadata values. */
 export function hasNullValues(e: Entry): boolean {
   const hasNullMode = e.mode === 0 && e.modeType === '-'
-  const hasNullTimestamp = e.timestamp.getTime() === 0
+  const hasNullTimestamp = timestampIsNull(e.timestamp)
   const hasNullSize = e.size < 0
   return hasNullMode || hasNullTimestamp || hasNullSize
 }
@@ -106,7 +121,7 @@ export function hasNullValues(e: Entry): boolean {
 export function getNullFields(e: Entry): string[] {
   const fields: string[] = []
   if (e.mode === 0 && e.modeType === '-') fields.push('Mode')
-  if (e.timestamp.getTime() === 0) fields.push('Timestamp')
+  if (timestampIsNull(e.timestamp)) fields.push('Timestamp')
   if (e.size < 0) fields.push('Size')
   return fields
 }
@@ -234,7 +249,7 @@ export function formatEntry(e: Entry, indentWidth: number, displayFormat: boolea
 
   // Timestamp
   let timeStr: string
-  if (e.timestamp.getTime() === 0) {
+  if (timestampIsNull(e.timestamp)) {
     timeStr = '-'
   } else {
     timeStr = formatTimestamp(e.timestamp)
@@ -287,7 +302,7 @@ export function canonicalEntry(e: Entry): string {
   }
 
   let timeStr: string
-  if (e.timestamp.getTime() === 0) {
+  if (timestampIsNull(e.timestamp)) {
     timeStr = '-'
   } else {
     timeStr = formatTimestamp(e.timestamp)

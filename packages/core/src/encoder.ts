@@ -6,8 +6,7 @@ import {
   formatEntry,
   flowOperator,
   FlowDirection,
-  isPathName,
-} from './entry.js'
+  isPathName, timestampIsNull } from './entry.js'
 import { formatName, formatTarget } from './safename.js'
 import { PathTraversalError } from './errors.js'
 
@@ -19,7 +18,7 @@ export interface EncoderOptions {
 
 /** Format a timestamp in human-readable local time. */
 function formatTimestampPretty(d: Date): string {
-  if (d.getTime() === 0) return '-                        '
+  if (timestampIsNull(d)) return '-                        '
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   const month = months[d.getMonth()]
   const day = d.getDate().toString().padStart(2, ' ')
@@ -84,7 +83,7 @@ function formatEntryPretty(
     ? '----------'
     : formatMode(entry.modeType, entry.mode)
 
-  const timeStr = entry.timestamp.getTime() === 0
+  const timeStr = timestampIsNull(entry.timestamp)
     ? '-                        '
     : formatTimestampPretty(entry.timestamp)
 

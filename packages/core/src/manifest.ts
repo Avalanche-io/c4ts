@@ -7,8 +7,7 @@ import {
   canonicalEntry,
   FlowDirection,
   isPathName,
-  NULL_SIZE,
-} from './entry.js'
+  NULL_SIZE, timestampIsNull } from './entry.js'
 import { naturalLess } from './naturalsort.js'
 import {
   InvalidEntryError,
@@ -492,7 +491,7 @@ function propagateMetadata(entries: Entry[]): void {
 
     // Robust null check: size may be -1, null, or undefined at runtime.
     const needsSize = !(entry.size >= 0)
-    const needsTimestamp = entry.timestamp.getTime() === 0
+    const needsTimestamp = timestampIsNull(entry.timestamp)
 
     if (!needsSize && !needsTimestamp) continue
 
@@ -557,10 +556,10 @@ function c4mContentSize(entries: Entry[]): number {
 function getMostRecentModtime(entries: Entry[]): Date {
   let mostRecent = new Date(0)
   for (const e of entries) {
-    if (e.timestamp.getTime() === 0) return new Date(0)
+    if (timestampIsNull(e.timestamp)) return new Date(0)
     if (e.timestamp > mostRecent) mostRecent = e.timestamp
   }
-  return mostRecent.getTime() === 0 ? new Date(0) : mostRecent
+  return timestampIsNull(mostRecent) ? new Date(0) : mostRecent
 }
 
 function formatBytes(bytes: number): string {
