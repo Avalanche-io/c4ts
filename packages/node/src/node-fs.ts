@@ -4,6 +4,24 @@ import type { FileSystem, DirEntry, FileStat } from '../../core/src/filesystem.j
 import { FileNotFoundError, bytesToStream, streamToBytes } from '../../core/src/filesystem.js'
 
 /**
+ * The whole second a file time falls in, as a c4m line carries it and Go
+ * writes it: the stat's nanoseconds floored toward negative infinity.
+ * Node's own stat.mtime is a Date built from a float of milliseconds, and
+ * through 1.0.26 c4ts recorded it: a time in a second's last half
+ * millisecond rounded up into the next second (an mtime of
+ * 15:06:40.9999997 became :41, where Go writes :40), so the same file gave
+ * c4ts and Go different C4 IDs, as did every directory above it. Floored
+ * here, a scan's entry holds exactly what its c4m line carries. BigInt `/`
+ * truncates toward zero, which before 1970 is the later second, so the
+ * floor is taken explicitly.
+ */
+export function secondOf(ns: bigint): Date {
+  let s = ns / 1_000_000_000n
+  if (ns % 1_000_000_000n < 0n) s -= 1n
+  return new Date(Number(s) * 1000)
+}
+
+/**
  * FileSystem implementation backed by Node.js fs module.
  * Wraps node:fs/promises to provide the standard FileSystem interface.
  */
@@ -21,11 +39,11 @@ export class NodeFS implements FileSystem {
 
   async stat(path: string): Promise<FileStat> {
     try {
-      const s = await stat(path)
+      const s = await stat(path, { bigint: true })
       return {
-        size: s.size,
-        mode: s.mode & 0o7777,
-        mtime: s.mtime,
+        size: Number(s.size),
+        mode: Number(s.mode) & 0o7777,
+        mtime: secondOf(s.mtimeNs),
         isDirectory: s.isDirectory(),
         isSymlink: s.isSymbolicLink(),
       }
@@ -84,11 +102,11 @@ export class NodeFS implements FileSystem {
 
   async lstat(path: string): Promise<FileStat> {
     try {
-      const s = await lstat(path)
+      const s = await lstat(path, { bigint: true })
       return {
-        size: s.size,
-        mode: s.mode & 0o7777,
-        mtime: s.mtime,
+        size: Number(s.size),
+        mode: Number(s.mode) & 0o7777,
+        mtime: secondOf(s.mtimeNs),
         isDirectory: s.isDirectory(),
         isSymlink: s.isSymbolicLink(),
       }
