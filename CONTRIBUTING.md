@@ -47,7 +47,7 @@ git clone https://github.com/Avalanche-io/c4ts.git
 cd c4ts
 pnpm install
 pnpm test          # run all tests (vitest)
-pnpm lint          # type-check (tsc --noEmit)
+pnpm -r exec tsc --noEmit   # type-check each package
 ```
 
 ## Running tests
@@ -70,7 +70,7 @@ npx vitest run id.test      # single test file
 
 ## Cross-language compatibility
 
-C4 IDs and c4m files must be byte-identical across all implementations (Go, Python, C, TypeScript). Test vectors in `tests/vectors/known_ids.json` are shared with every implementation.
+C4 IDs and c4m files must be byte-identical across all implementations (Go, Python, C, TypeScript). Test vectors in `packages/core/tests/vectors/known_ids.json` are shared with every implementation.
 
 When changing ID computation, base58 encoding, c4m parsing, or manifest C4 ID computation, verify against the Go reference at https://github.com/Avalanche-io/c4.
 

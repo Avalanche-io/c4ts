@@ -12,8 +12,11 @@ cd c4ts && pnpm install     # install workspace dependencies
 ```
 
 All Node.js examples import from `@avalanche-io/c4` (core, platform-agnostic)
-and `@avalanche-io/c4-node` (Node.js filesystem + TreeStore). The browser
-example has no dependencies beyond a modern browser.
+and `@avalanche-io/c4-node` (Node.js filesystem + TreeStore). From a clone of
+this repo neither name resolves yet: `pnpm install` links neither into the
+root, so each example fails with `ERR_MODULE_NOT_FOUND`. Mixing the two
+packages also breaks `instanceof` checks (see the main README's Node.js
+section). The browser example has no dependencies beyond a modern browser.
 
 ---
 

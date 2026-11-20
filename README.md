@@ -64,7 +64,7 @@ C4 IDs are:
 A c4m file is a human-readable text format that describes a filesystem without containing the actual file content. Each line is one entry: permissions, timestamp, size, name, and C4 ID.
 
 ```
--rw-r--r-- 2025-03-15T10:30:00Z    1,234 hello.txt   c459dsjfsc...
+-rw-r--r-- 2025-03-15T10:30:00Z    1,234 hello.txt   c4278VoUM5...
 -rw-r--r-- 2025-03-15T10:31:00Z    5,678 world.txt   c41MKNsQqm...
 drwxr-xr-x 2025-03-15T10:31:00Z    2,184 src/
   -rw-r--r-- 2025-03-15T10:30:00Z  2,048 main.ts     c4Kq8HTriN...
@@ -539,10 +539,10 @@ c4ts is built on **interface-driven composition**. The two core interfaces -- `S
 
 This means the same code works across environments:
 
-| Component | Browser | Node.js | Testing |
-|-----------|---------|---------|---------|
-| **Store** | `IndexedDBStore` | `TreeStore` | `MemoryStore` |
-| **FileSystem** | `FileSystemAccessFS` | `NodeFS` | `MemoryFS` |
+| Component      | Browser              | Node.js     | Testing       |
+| -------------- | -------------------- | ----------- | ------------- |
+| **Store**      | `IndexedDBStore`     | `TreeStore` | `MemoryStore` |
+| **FileSystem** | `FileSystemAccessFS` | `NodeFS`    | `MemoryFS`    |
 
 The `ContentResolver` adds a third axis: multi-source content fetching with race and priority modes, accepting any `ContentSource` (stores, HTTP endpoints, peer connections).
 
