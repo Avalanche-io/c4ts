@@ -1,6 +1,6 @@
 # c4ts — C4 for TypeScript
 
-> **Note**: This is the original design vision document. The implementation has evolved — see [README.md](./README.md) for the actual API and [design/architecture.md](./design/architecture.md) for the current architecture. API names and structure below may differ from what was shipped.
+> **Note**: This is the original design vision document. The implementation has evolved — see [README.md](./README.md) for the actual API. [design/architecture.md](./design/architecture.md) also predates 1.0. API names and structure below may differ from what was shipped.
 
 ## Vision
 

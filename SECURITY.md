@@ -22,7 +22,7 @@ Do not open a public issue for security vulnerabilities.
 - The decoder rejects path traversal attempts (`../`, `./`, embedded separators)
 - CR characters (0x0D) are rejected to prevent line-ending ambiguity
 - Directive lines (starting with `@`) are rejected
-- Patch C4 ID verification prevents content substitution attacks
+- Patch boundary IDs are recorded, not checked: a chain whose boundary names a different prior state is read without error
 - Maximum line length is implementation-defined
 
 ### Content stores
