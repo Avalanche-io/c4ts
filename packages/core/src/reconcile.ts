@@ -165,6 +165,7 @@ export async function apply(
     errors: [],
   }
 
+  const made = new Set<string>() // directories this apply created
   const ops = reconcilePlan.operations
   for (let i = 0; i < ops.length; i++) {
     const op = ops[i]
@@ -176,6 +177,7 @@ export async function apply(
       switch (op.type) {
         case 'mkdir':
           await fs.mkdir(fullPath, { recursive: true })
+          made.add(op.path)
           break
 
         case 'create':
@@ -184,11 +186,14 @@ export async function apply(
             const stream = await store.get(op.entry.c4id)
             await fs.writeFile(fullPath, stream)
           }
-          // Apply metadata if supported
+          // Apply metadata if supported. This apply wrote the file's content
+          // (a create, or an overwrite of different content, both fresh in
+          // core's apply, dfd6e12), so a null timestamp becomes the epoch,
+          // which scans back as null.
           if (op.entry && fs.setMeta) {
             await fs.setMeta(fullPath, {
               mode: op.entry.mode,
-              mtime: op.entry.timestamp,
+              mtime: timestampIsNull(op.entry.timestamp) ? NULL_TIMESTAMP : op.entry.timestamp,
             })
           }
           if (op.type === 'create') result.created++
@@ -217,20 +222,19 @@ export async function apply(
   // part of its parent's listing, so without this the tree does not read
   // back at the c4m's ID. Through 2026-11-16 directories kept the time they
   // were made, so a checkout in a later second than the scan left every
-  // directory holding a subdirectory modified. A null timestamp or a null
-  // mode is never applied, as core release/1.0.27's reconcile/apply.go
-  // (setMetadata) does on this line; a directory made from a null
-  // timestamp taking the epoch is 1.1 (core a42897d).
+  // directory holding a subdirectory modified. A null timestamp on a
+  // directory this apply made becomes the epoch, so it reads back null; on
+  // one that already existed a null never overwrites, nor does a null mode
+  // (core reconcile/apply.go setMetadata, dfd6e12). Through 1.0.26 a
+  // directory made from a null timestamp kept the time it was made.
   if (fs.setMeta && reconcilePlan.directories) {
     const dirs = [...reconcilePlan.directories].sort(
       (a, b) => b.path.split('/').length - a.path.split('/').length,
     )
     for (const { path, entry } of dirs) {
       const nullTime = timestampIsNull(entry.timestamp)
-      const mtime = nullTime ? undefined : entry.timestamp
-      // On the 1.0.x line a null mode is mode 0 with type '-' (entry.ts
-      // hasNullValues); files take entry.mode as is, and so do directories.
-      const mode = entry.mode === 0 && entry.modeType === '-' ? undefined : entry.mode
+      const mtime = nullTime ? (made.has(path) ? NULL_TIMESTAMP : undefined) : entry.timestamp
+      const mode = nullModeOnThisLine(entry) ? undefined : entry.mode
       if (mtime === undefined && mode === undefined) continue
       try {
         await fs.setMeta(joinPath(rootPath, path), { mode, mtime })
@@ -264,6 +268,14 @@ function refuseFoldedRanges(manifest: Manifest): void {
         folded.join(', '),
     )
   }
+}
+
+/**
+ * On the 1.0.x line a null mode is mode 0 with type '-' (entry.ts
+ * hasNullValues); this line's decoder reads a known zero the same way.
+ */
+function nullModeOnThisLine(entry: Entry): boolean {
+  return entry.mode === 0 && entry.modeType === '-'
 }
 
 /** Recursively collect all paths that exist on disk. */
