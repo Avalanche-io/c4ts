@@ -5,6 +5,7 @@ import { streamToBytes, bytesToStream, joinPath } from './filesystem.js'
 import type { Store } from './store.js'
 import type { Manifest } from './manifest.js'
 import { type Entry, isDir, NULL_TIMESTAMP, timestampIsNull } from './entry.js'
+import { C4Error } from './errors.js'
 
 /** Types of operations the reconciler can perform. */
 export type ReconcileOpType = 'mkdir' | 'create' | 'update' | 'remove' | 'rmdir'
@@ -53,6 +54,7 @@ export async function plan(
   rootPath: string,
   store?: Store,
 ): Promise<ReconcilePlan> {
+  refuseFoldedRanges(manifest)
   const operations: ReconcileOp[] = []
   const missing: string[] = []
   const skipped: string[] = []
@@ -239,6 +241,29 @@ export async function apply(
   }
 
   return result
+}
+
+/**
+ * Refuse a manifest holding a folded range, before anything is written.
+ * A folded range is one line standing for numbered frames
+ * (`frame.[0001-0100].exr`); writing it back means expanding it from its ID
+ * list into one file per frame, and c4ts has no expander. Without this check
+ * the range line was written as a single file under the range's name,
+ * holding the ID list's bytes, and counted as created. plan() is the gate
+ * for reconcile and Workspace.checkout alike, the dry run included.
+ */
+function refuseFoldedRanges(manifest: Manifest): void {
+  const folded: string[] = []
+  for (const [path, entry] of manifest) {
+    if (entry.isSequence) folded.push(path)
+  }
+  if (folded.length > 0) {
+    throw new C4Error(
+      "this version of c4ts can't write a folded range back to files, so nothing was written; " +
+        'use a description made without folding (c4 id without -S). Folded ranges: ' +
+        folded.join(', '),
+    )
+  }
 }
 
 /** Recursively collect all paths that exist on disk. */
