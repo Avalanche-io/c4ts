@@ -34,6 +34,11 @@ const ids = Object.fromEntries(
   readFileSync(join(VECTOR, 'plain-ids.txt'), 'utf8').trim().split('\n').map(l => l.split(' ')),
 )
 
+// Windows has no POSIX modes, so a tree materialised there scans with other
+// modes and a different description ID (as in core's epoch-second vector:
+// the IDs agree "on a platform with POSIX modes"). There the files' paths and
+// C4 IDs are compared; the description ID only where modes exist.
+const win = process.platform === 'win32'
 let dir = ''
 afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true })
@@ -139,7 +144,10 @@ describe('the same trees unfolded still round-trip', () => {
       const res = await apply(await plan(m, fs, target, store), fs, target, store)
       expect(res.errors).toEqual([])
       const back = await scan(fs, target)
-      expect((await back.computeC4ID()).toString()).toBe(ids[tree])
+      const files = (x: Manifest) =>
+        [...x].filter(([, e]) => !e.name.endsWith('/')).map(([path, e]) => `${path} ${e.c4id}`)
+      expect(files(back)).toEqual(files(m))
+      if (!win) expect((await back.computeC4ID()).toString()).toBe(ids[tree])
     })
   }
 })
