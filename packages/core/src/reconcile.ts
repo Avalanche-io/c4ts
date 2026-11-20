@@ -186,13 +186,17 @@ export async function apply(
             const stream = await store.get(op.entry.c4id)
             await fs.writeFile(fullPath, stream)
           }
-          // Apply metadata if supported. This apply wrote the file's content
-          // (a create, or an overwrite of different content, both fresh in
-          // core's apply, dfd6e12), so a null timestamp becomes the epoch,
-          // which scans back as null.
+          // Apply metadata if supported. A null mode is never applied: a
+          // created file keeps the process's default permissions (0666 less
+          // the umask), and an existing one keeps its mode. Through 1.0.26 a
+          // null mode went to chmod as 0, leaving a created file at 0000,
+          // unreadable. This apply wrote the file's content (a create, or an
+          // overwrite of different content, both fresh in core's apply,
+          // dfd6e12), so a null timestamp becomes the epoch, which scans back
+          // as null.
           if (op.entry && fs.setMeta) {
             await fs.setMeta(fullPath, {
-              mode: op.entry.mode,
+              mode: nullModeOnThisLine(op.entry) ? undefined : op.entry.mode,
               mtime: timestampIsNull(op.entry.timestamp) ? NULL_TIMESTAMP : op.entry.timestamp,
             })
           }
@@ -272,7 +276,8 @@ function refuseFoldedRanges(manifest: Manifest): void {
 
 /**
  * On the 1.0.x line a null mode is mode 0 with type '-' (entry.ts
- * hasNullValues); this line's decoder reads a known zero the same way.
+ * hasNullValues), and this line's decoder reads a ten-dash mode
+ * (`----------`) the same way. Files and directories share the test.
  */
 function nullModeOnThisLine(entry: Entry): boolean {
   return entry.mode === 0 && entry.modeType === '-'
