@@ -2,6 +2,14 @@
 
 ## Unreleased (1.1)
 
+### ⚠ plan() refuses a manifest holding a folded range, before writing anything
+
+**Silent corruption fixed.** Handed a manifest holding a folded range (one
+line such as `frame.[0001-0100].exr`), `plan()`/`apply()` and
+`Workspace.checkout` wrote the range's ID list into one file named like the
+range, wrote no frame, and reported success; `plan()` now refuses the whole
+manifest with a `C4Error` naming the range, before anything is written (#59).
+
 ### ⚠ A time inside the epoch second is null, for entries a caller builds too
 
 **Convergence fixed.** An entry built in memory with a time inside the
