@@ -20,3 +20,4 @@ packages/core/tests/fixtures/subsecond-vector/* -text
 packages/core/tests/fixtures/epoch-second-vector/* -text
 
 packages/node/tests/fixtures/split-race-store/** -text
+packages/node/tests/fixtures/folded-range-refusal/** -text
